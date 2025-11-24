@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Graph Mind</title>
+    <!-- Cytoscape from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <!-- FCose Layout from CDN (optional, using cose as fallback if needed, but fcose is better) -->
+    <script src="https://unpkg.com/layout-base/layout-base.js"></script>
+    <script src="https://unpkg.com/cose-base/cose-base.js"></script>
+    <script src="https://unpkg.com/cytoscape-fcose/cytoscape-fcose.js"></script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h2>GraphMind</h2>
+
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="Search nodes...">
+                    <button onclick="searchGraph()">Go</button>
+                </div>
+
+                <div class="upload-box">
+                    <input type="file" id="file-upload" accept=".txt,.md">
+                    <button onclick="uploadFile()">Upload</button>
+                </div>
+
+                <button onclick="refreshGraph()" class="refresh-btn">Refresh Graph</button>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-header" id="chat-header">
+                    Chat (Global)
+                </div>
+                <div class="chat-history" id="chat-history">
+                    <!-- Messages go here -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Ask something...">
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Graph Area -->
+        <div class="graph-area">
+            <div id="cy"></div>
+            <div id="loading" class="loading" style="display:none;">Processing...</div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+
+</html>
