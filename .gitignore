@@ -1,49 +1,36 @@
-# Python bytecode and cache
+# Python
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
+*.pyo
+*.pyd
 
-# Virtual environments
+# 虚拟环境
 venv/
-.env/
+.env
 .venv/
-env/
 
-# Packages & build artifacts
-dist/
-build/
-*.egg-info/
-.eggs/
-*.egg
+# 测试脚本
+backend/test_*.py
+backend/*_test.py
 
-# Logs & coverage
-*.log
-coverage.xml
-htmlcov/
-.coverage*
-.pytest_cache/
-.cache/
-.mypy_cache/
-.dmypy.json
-.pyre/
+# 环境配置
+*.env
+.env.*
 
-# Editors/IDE
+# 编辑器/IDE
 .vscode/
 .idea/
 *.swp
 
-# Environment & secrets
-.env
-.env.*
-*.sqlite3
+# 日志和缓存
+*.log
+.pytest_cache/
+.cache/
+.mypy_cache/
+.dmypy.json
 
-# OS-specific
-.DS_Store
-Thumbs.db
-
-# Node / frontend (if added later)
+# 前端依赖
 node_modules/
-*.tsbuildinfo
 
-# Backup / misc
+# 其他
 *.bak
