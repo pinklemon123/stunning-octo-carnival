@@ -4,10 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Graph Mind</title>
-    <!-- Cytoscape from CDN -->
+    <title>GraphMind AI</title>
+
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Cytoscape -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
-    <!-- FCose Layout from CDN (optional, using cose as fallback if needed, but fcose is better) -->
     <script src="https://unpkg.com/layout-base/layout-base.js"></script>
     <script src="https://unpkg.com/cose-base/cose-base.js"></script>
     <script src="https://unpkg.com/cytoscape-fcose/cytoscape-fcose.js"></script>
@@ -20,32 +26,64 @@
     <div class="container">
         <!-- Sidebar -->
         <div class="sidebar">
-            <h2>GraphMind</h2>
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-circle-nodes"></i> GraphMind</h2>
+            </div>
 
             <div class="controls">
-                <div class="search-box">
+                <div class="control-group">
                     <input type="text" id="search-input" placeholder="Search nodes...">
-                    <button onclick="searchGraph()">Go</button>
+                    <button onclick="searchGraph()" class="icon-btn"><i
+                            class="fa-solid fa-magnifying-glass"></i></button>
                 </div>
 
-                <div class="upload-box">
+                <div class="control-group">
                     <input type="file" id="file-upload" accept=".txt,.md">
-                    <button onclick="uploadFile()">Upload</button>
+                    <button onclick="uploadFile()" class="icon-btn" title="Upload"><i
+                            class="fa-solid fa-cloud-arrow-up"></i></button>
                 </div>
 
-                <button onclick="refreshGraph()" class="refresh-btn">Refresh Graph</button>
+                <div class="control-group">
+                    <select id="source-filter" onchange="searchGraph()"
+                        style="flex: 1; padding: 10px 14px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 0.9rem; outline: none; cursor: pointer;">
+                        <option value="">All Sources</option>
+                        {% for source in sources %}
+                        <option value="{{ source }}">{{ source }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <button onclick="refreshGraph()" class="refresh-btn" style="flex: 1;">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button onclick="clearGraph()" class="refresh-btn"
+                        style="flex: 1; background-color: #ef4444; color: white; border-color: #ef4444;">
+                        <i class="fa-solid fa-trash"></i> Clear
+                    </button>
+                </div>
+
+                <div class="control-group" style="margin-top: 10px;">
+                    <a href="/files" class="refresh-btn"
+                        style="text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: var(--sidebar-bg); color: var(--text-primary);">
+                        <i class="fa-solid fa-folder-open"></i> Manage Files
+                    </a>
+                </div>
             </div>
 
             <div class="chat-container">
                 <div class="chat-header" id="chat-header">
-                    Chat (Global)
+                    <i class="fa-regular fa-comments"></i> AI Assistant
                 </div>
                 <div class="chat-history" id="chat-history">
-                    <!-- Messages go here -->
+                    <div class="message assistant">
+                        Hello! I'm your knowledge graph assistant. Upload a document to extract knowledge, or ask me
+                        questions about the graph.
+                    </div>
                 </div>
                 <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Ask something...">
-                    <button onclick="sendMessage()">Send</button>
+                    <input type="text" id="chat-input" placeholder="Ask something about the graph...">
+                    <button onclick="sendMessage()" class="icon-btn"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>

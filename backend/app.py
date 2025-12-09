@@ -173,27 +173,41 @@ def ingest_triples(triples: List[Dict]):
     with driver.session() as session:
         session.run(query, triples=triples)
 
-def get_subgraph(seed_id: str, depth: int = 1):
+def get_subgraph(seed_id: str, depth: int = 1, source_doc: str = None):
     if not NEO4J_AVAILABLE:
         return {"nodes": [], "edges": []}
     
+    # Base query structure
+    if seed_id:
+        match_clause = f"MATCH (n:Entity {{name: $seed_id}})-[r*1..{depth}]-(m)"
+    else:
+        match_clause = "MATCH (n:Entity)-[r]->(m)"
+    
+    where_clause = ""
+    if source_doc:
+        # Filter relationships by source_doc property
+        # Note: If path length > 1, we check if ANY relationship in the path matches, 
+        # or strictly ALL. Usually for knowledge graphs, we might want to see connections 
+        # that came from that doc. 
+        # For simplicity in variable length path (r*...), we'll check the last relationship or all.
+        # But Cypher variable length path returns a list of relationships.
+        if seed_id:
+             where_clause = "WHERE ALL(rel IN r WHERE rel.source_doc = $source_doc)"
+        else:
+             where_clause = "WHERE r.source_doc = $source_doc"
+
     query = f"""
-    MATCH (n:Entity {{name: $seed_id}})-[r*1..{depth}]-(m)
+    {match_clause}
+    {where_clause}
     RETURN n, r, m
     LIMIT 100
     """
-    if not seed_id:
-        query = """
-        MATCH (n:Entity)-[r]->(m)
-        RETURN n, r, m
-        LIMIT 50
-        """
     
     nodes = {}
     edges = []
     
     with driver.session() as session:
-        result = session.run(query, seed_id=seed_id)
+        result = session.run(query, seed_id=seed_id, source_doc=source_doc)
         for record in result:
             n = record.get("n")
             if n:
@@ -227,11 +241,35 @@ def get_subgraph(seed_id: str, depth: int = 1):
         "edges": edges
     }
 
+def get_source_documents():
+    if not NEO4J_AVAILABLE:
+        return []
+    
+    query = """
+    MATCH ()-[r]->()
+    WHERE r.source_doc IS NOT NULL
+    RETURN DISTINCT r.source_doc as source_doc
+    ORDER BY source_doc
+    """
+    
+    sources = []
+    with driver.session() as session:
+        result = session.run(query)
+        for record in result:
+            sources.append(record["source_doc"])
+    return sources
+
 # --- Routes ---
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    sources = get_source_documents()
+    return render_template("index.html", sources=sources)
+
+@app.route("/files")
+def files():
+    sources = get_source_documents()
+    return render_template("files.html", files=sources)
 
 @app.route("/api/upload", methods=["POST"])
 def upload_file():
@@ -284,7 +322,8 @@ def upload_file():
 def get_graph():
     seed_id = request.args.get("seed_id")
     depth = int(request.args.get("depth", 1))
-    data = get_subgraph(seed_id, depth)
+    source_doc = request.args.get("source")
+    data = get_subgraph(seed_id, depth, source_doc)
     return jsonify(data)
 
 @app.route("/api/chat", methods=["POST"])

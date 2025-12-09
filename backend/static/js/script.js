@@ -3,13 +3,28 @@ let selectedNodeId = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     initCytoscape();
-    refreshGraph();
+
+    // Check for URL parameters (e.g. ?source=test.txt)
+    const urlParams = new URLSearchParams(window.location.search);
+    const sourceParam = urlParams.get('source');
+
+    if (sourceParam) {
+        document.getElementById('source-filter').value = sourceParam;
+        // We can call fetchGraph directly, which will read the input we just set
+        fetchGraph();
+    } else {
+        refreshGraph();
+    }
 
     // Enter key support
     document.getElementById('chat-input').addEventListener('keypress', function (e) {
         if (e.key === 'Enter') sendMessage();
     });
     document.getElementById('search-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') searchGraph();
+    });
+    // Also allow Enter on source filter
+    document.getElementById('source-filter').addEventListener('keypress', function (e) {
         if (e.key === 'Enter') searchGraph();
     });
 });
@@ -83,13 +98,29 @@ function initCytoscape() {
     });
 }
 
+function clearGraph() {
+    if (cy) {
+        cy.elements().remove();
+    }
+    document.getElementById('chat-header').innerText = 'Chat (Global)';
+    selectedNodeId = null;
+}
+
 async function fetchGraph(seedId = null, merge = false) {
     showLoading(true);
     try {
         let url = '/api/graph';
-        if (seedId) {
-            url += `?seed_id=${encodeURIComponent(seedId)}&depth=1`;
-        }
+        const params = new URLSearchParams();
+
+        if (seedId) params.append('seed_id', seedId);
+
+        const sourceFilter = document.getElementById('source-filter').value.trim();
+        if (sourceFilter) params.append('source', sourceFilter);
+
+        if (seedId) params.append('depth', '1');
+
+        const queryString = params.toString();
+        if (queryString) url += `?${queryString}`;
 
         const response = await fetch(url);
         const data = await response.json();
@@ -131,9 +162,11 @@ function refreshGraph() {
 
 function searchGraph() {
     const query = document.getElementById('search-input').value;
-    if (query) {
-        fetchGraph(query);
-    }
+    // We call fetchGraph, which will pick up both the search input (as seedId if passed) 
+    // and the source filter.
+    // Note: fetchGraph logic above treats the first arg as seedId.
+    // Let's adjust usage.
+    fetchGraph(query);
 }
 
 async function uploadFile() {
