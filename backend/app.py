@@ -275,6 +275,10 @@ def files():
 def review_page():
     return render_template("review.html")
 
+@app.route("/query")
+def query_page():
+    return render_template("query.html")
+
 from ingestion import parse_file, scrape_url
 
 @app.route("/api/upload", methods=["POST"])
@@ -603,6 +607,121 @@ def entity_merge():
     except Exception as e:
         print(f"Entity merge error: {e}")
         return jsonify({"error": str(e)}), 500
+
+# --- CRUD & Advanced APIs ---
+
+@app.route("/api/relation/create", methods=["POST"])
+def relation_create():
+    data = request.json or {}
+    subject = data.get("subject")
+    predicate = data.get("predicate")
+    object_ = data.get("object")
+    confidence = float(data.get("confidence", 1.0))
+    source_doc = data.get("source_doc")
+    span = data.get("span")
+    if not all([subject, predicate, object_]):
+        return jsonify({"error": "subject, predicate, object are required"}), 400
+    if not NEO4J_AVAILABLE:
+        return jsonify({"status": "skipped"})
+    query = """
+    MERGE (a:Entity {name: $subject})
+    MERGE (b:Entity {name: $object})
+    MERGE (a)-[r:REL {predicate: $predicate}]->(b)
+    SET r.confidence = $confidence,
+        r.source_doc = $source_doc,
+        r.span = $span
+    RETURN a, r, b
+    """
+    with driver.session() as session:
+        session.run(query, subject=subject, predicate=predicate, object=object_, confidence=confidence, source_doc=source_doc, span=span)
+    return jsonify({"status": "success"})
+
+@app.route("/api/entity/rename", methods=["POST"])
+def entity_rename():
+    data = request.json or {}
+    old_name = data.get("old_name")
+    new_name = data.get("new_name")
+    if not old_name or not new_name:
+        return jsonify({"error": "old_name and new_name are required"}), 400
+    if not NEO4J_AVAILABLE:
+        return jsonify({"status": "skipped"})
+    with driver.session() as session:
+        session.run("""
+            MATCH (e:Entity {name: $old})
+            SET e.name = $new
+            RETURN e
+        """, old=old_name, new=new_name)
+    return jsonify({"status": "success"})
+
+@app.route("/api/cypher", methods=["POST"])
+def run_cypher():
+    data = request.json or {}
+    query = data.get("query")
+    params = data.get("params") or {}
+    if not query:
+        return jsonify({"error": "query is required"}), 400
+    if not NEO4J_AVAILABLE:
+        return jsonify({"error": "Neo4j not available"}), 503
+    try:
+        rows = []
+        with driver.session() as session:
+            result = session.run(query, **params)
+            for record in result:
+                row = {}
+                for key in record.keys():
+                    row[key] = serialize_neo4j_object(record.get(key))
+                rows.append(row)
+        return jsonify({"rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/export", methods=["POST"])
+def export_graph():
+    data = request.json or {}
+    seed_id = data.get("seed_id")
+    depth = int(data.get("depth", 1))
+    source_doc = data.get("source")
+    fmt = (data.get("format") or "json").lower()
+    graph = get_subgraph(seed_id, depth, source_doc)
+    if fmt == "json":
+        return jsonify(graph)
+    elif fmt == "csv":
+        import csv
+        from io import StringIO
+        buf = StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["source","predicate","target","confidence","source_doc","span"])
+        for e in graph.get("edges", []):
+            d = e["data"]
+            writer.writerow([d.get("source"), d.get("predicate") or d.get("label"), d.get("target"), d.get("confidence"), d.get("source_doc"), d.get("span")])
+        return app.response_class(buf.getvalue(), mimetype="text/csv")
+    elif fmt == "graphml":
+        # Minimal GraphML export
+        nodes_xml = "".join([f"<node id=\"{n['data']['id']}\"/>" for n in graph.get("nodes", [])])
+        edges_xml = "".join([f"<edge source=\"{e['data']['source']}\" target=\"{e['data']['target']}\" label=\"{e['data'].get('predicate') or e['data'].get('label')}\"/>" for e in graph.get("edges", [])])
+        xml = f"<?xml version=\"1.0\" encoding=\"UTF-8\"?><graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\"><graph edgedefault=\"directed\">{nodes_xml}{edges_xml}</graph></graphml>"
+        return app.response_class(xml, mimetype="application/xml")
+    else:
+        return jsonify({"error": "unsupported format"}), 400
+
+@app.route("/api/stats", methods=["GET"])
+def graph_stats():
+    seed_id = request.args.get("seed_id")
+    if not NEO4J_AVAILABLE:
+        return jsonify({"nodes": 0, "rels": 0})
+    with driver.session() as session:
+        if seed_id:
+            res_nodes = session.run("""
+                MATCH (n:Entity {name: $seed})-[r]-(m) RETURN count(DISTINCT n)+count(DISTINCT m) AS nodes
+            """, seed=seed_id).single()
+            res_rels = session.run("""
+                MATCH (n:Entity {name: $seed})-[r]-(m) RETURN count(r) AS rels
+            """, seed=seed_id).single()
+        else:
+            res_nodes = session.run("MATCH (n:Entity) RETURN count(n) AS nodes").single()
+            res_rels = session.run("MATCH ()-[r:REL]->() RETURN count(r) AS rels").single()
+    return jsonify({"nodes": res_nodes["nodes"], "rels": res_rels["rels"]})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)

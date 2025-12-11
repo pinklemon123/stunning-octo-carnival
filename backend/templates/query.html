@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cypher Query - GraphMind AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .container { padding: 40px; max-width: 1100px; margin: 0 auto; color: var(--text-primary); }
+    textarea { width: 100%; min-height: 180px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--sidebar-bg); color: var(--text-primary); padding: 12px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; margin: 12px 0; }
+    pre { background: var(--sidebar-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Cypher Query</h2>
+    <div class="toolbar">
+      <a href="/" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Graph</a>
+    </div>
+    <textarea id="query" placeholder="MATCH (a:Entity)-[r:REL]->(b:Entity) RETURN a.name AS subject, r.predicate AS predicate, b.name AS object LIMIT 10"></textarea>
+    <div class="toolbar">
+      <button class="icon-btn" onclick="runQuery()"><i class="fa-solid fa-play"></i></button>
+    </div>
+    <h3>Result</h3>
+    <pre id="result"></pre>
+  </div>
+  <script>
+    async function runQuery() {
+      const q = document.getElementById('query').value;
+      if (!q.trim()) return;
+      const res = await fetch('/api/cypher', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ query: q }) });
+      const data = await res.json();
+      document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
