@@ -48,6 +48,12 @@
                     </select>
                 </div>
 
+                <!-- Confidence Filter -->
+                <div class="control-group">
+                    <input type="number" step="0.01" min="0" max="1" id="min-conf-input" placeholder="Min confidence (e.g. 0.5)">
+                    <button onclick="applyMinConfidence()" class="icon-btn" title="Apply confidence filter"><i class="fa-solid fa-filter"></i></button>
+                </div>
+
                 <!-- Actions -->
                 <div class="control-group">
                     <button onclick="refreshGraph()" class="refresh-btn" title="Refresh Graph">
@@ -88,6 +94,25 @@
                 <div class="control-group" style="margin-top: 10px;">
                     <input type="text" id="url-input" placeholder="Import from URL...">
                     <button onclick="processUrl()" class="icon-btn"><i class="fa-solid fa-globe"></i></button>
+                </div>
+
+                <!-- Export Subgraph -->
+                <div class="control-group" style="margin-top: 10px;">
+                    <input type="text" id="export-seed" placeholder="Seed id (optional)">
+                    <input type="number" id="export-depth" placeholder="Depth" value="1" style="width:80px">
+                    <select id="export-format" class="styled-select" style="max-width:120px">
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                        <option value="graphml">GraphML</option>
+                    </select>
+                    <button onclick="exportSubgraph()" class="icon-btn" title="Export"><i class="fa-solid fa-download"></i></button>
+                </div>
+
+                <!-- Shortest Path -->
+                <div class="control-group" style="margin-top: 10px;">
+                    <input type="text" id="sp-source" placeholder="Shortest path: source">
+                    <input type="text" id="sp-target" placeholder="target">
+                    <button onclick="shortestPath()" class="icon-btn" title="Find shortest path"><i class="fa-solid fa-route"></i></button>
                 </div>
             </div>
 

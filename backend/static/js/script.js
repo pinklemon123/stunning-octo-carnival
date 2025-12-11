@@ -1,6 +1,7 @@
 let cy;
 let selectedNodeId = null;
 let currentLayout = 'fcose';
+let currentMinConfidence = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     initCytoscape();
@@ -143,6 +144,8 @@ async function fetchGraph(seedId = null, merge = false) {
         const sourceFilter = document.getElementById('source-filter').value.trim();
         if (sourceFilter) params.append('source', sourceFilter);
 
+        if (currentMinConfidence !== null) params.append('min_confidence', String(currentMinConfidence));
+
         if (seedId) params.append('depth', '1');
 
         const queryString = params.toString();
@@ -219,6 +222,15 @@ function searchGraph() {
     }
 }
 
+function applyMinConfidence() {
+    const v = document.getElementById('min-conf-input').value;
+    if (v === '') { currentMinConfidence = null; refreshGraph(); return; }
+    const num = Number(v);
+    if (isNaN(num) || num < 0 || num > 1) { alert('请输入 0-1 之间的数'); return; }
+    currentMinConfidence = num;
+    refreshGraph();
+}
+
 async function uploadFile() {
     const fileInput = document.getElementById('file-upload');
     const files = fileInput.files;
@@ -233,6 +245,56 @@ async function uploadFile() {
         'target-arrow-color': '#e67e22'
     }).update();
     fileInput.value = '';
+}
+async function exportSubgraph() {
+    const seed = document.getElementById('export-seed').value.trim();
+    const depth = Number(document.getElementById('export-depth').value || '1');
+    const source = document.getElementById('source-filter').value.trim();
+    const fmt = document.getElementById('export-format').value;
+    try {
+        const res = await fetch('/api/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seed_id: seed || null, depth: depth, source: source || null, format: fmt })
+        });
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        const url = window.URL.createObjectURL(blob);
+        a.href = url;
+        a.download = `subgraph.${fmt === 'json' ? 'json' : (fmt === 'csv' ? 'csv' : 'graphml')}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('导出失败: ' + err.message);
+    }
+}
+
+async function shortestPath() {
+    const s = document.getElementById('sp-source').value.trim();
+    const t = document.getElementById('sp-target').value.trim();
+    if (!s || !t) { alert('请输入两个节点名称'); return; }
+    try {
+        const q = `
+        MATCH (a:Entity {name: $s}), (b:Entity {name: $t}),
+        p = shortestPath((a)-[*]-(b))
+        RETURN p LIMIT 1`;
+        const res = await fetch('/api/cypher', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, params: { s, t } }) });
+        const data = await res.json();
+        if (!res.ok) { alert('查询失败: ' + (data.error || 'Unknown')); return; }
+        // Clear previous highlight
+        cy.elements().removeClass('path-highlight');
+        // Extract nodes/edges from returned path
+        const rows = data.rows || [];
+        if (rows.length === 0) { alert('未找到路径'); return; }
+        // naive approach: refetch graph including both nodes to ensure elements exist
+        await fetchGraph(null, false);
+        const nodesToFit = cy.nodes().filter(n => n.id() === s || n.id() === t);
+        nodesToFit.addClass('path-highlight');
+        cy.style().selector('.path-highlight').style({ 'background-color': '#2ecc71', 'line-color': '#2ecc71', 'target-arrow-color': '#27ae60' }).update();
+        cy.fit(nodesToFit, 80);
+    } catch (err) {
+        alert('最短路径失败: ' + err.message);
+    }
 }
 
 async function uploadFiles(files) {
