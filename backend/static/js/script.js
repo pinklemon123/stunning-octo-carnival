@@ -1,5 +1,6 @@
 let cy;
 let selectedNodeId = null;
+let currentLayout = 'fcose';
 
 document.addEventListener('DOMContentLoaded', function () {
     initCytoscape();
@@ -168,15 +169,26 @@ async function fetchGraph(seedId = null, merge = false) {
 }
 
 function runLayout() {
-    const layoutName = (typeof cytoscape('core', 'fcose') === 'function') ? 'fcose' : 'cose';
-    cy.layout({
-        name: layoutName,
-        animate: true,
-        animationDuration: 800,
-        randomize: false,
-        fit: true,
-        padding: 50
-    }).run();
+    let layoutName = currentLayout;
+    // Fallback if fcose not available
+    if (layoutName === 'fcose' && typeof cytoscape('core', 'fcose') !== 'function') {
+        layoutName = 'cose';
+    }
+    const optionsByLayout = {
+        fcose: { name: 'fcose', animate: true, animationDuration: 800, fit: true, padding: 50 },
+        cose: { name: 'cose', animate: true, animationDuration: 800, fit: true, padding: 50 },
+        grid: { name: 'grid', fit: true, padding: 50 },
+        concentric: { name: 'concentric', fit: true, padding: 50 }
+    };
+    const opts = optionsByLayout[layoutName] || optionsByLayout['cose'];
+    cy.layout(opts).run();
+}
+
+function applyLayoutFromSelect() {
+    const select = document.getElementById('layout-select');
+    if (!select) return;
+    currentLayout = select.value;
+    runLayout();
 }
 
 function refreshGraph() {
@@ -191,7 +203,20 @@ function searchGraph() {
     // and the source filter.
     // Note: fetchGraph logic above treats the first arg as seedId.
     // Let's adjust usage.
-    fetchGraph(query);
+    // If query is empty, refresh; else try to highlight existing nodes first.
+    if (!query) {
+        refreshGraph();
+        return;
+    }
+    const matches = cy.nodes().filter(n => (n.data('label') || '').includes(query));
+    if (matches.length > 0) {
+        cy.elements().removeClass('highlight');
+        matches.addClass('highlight');
+        cy.fit(matches, 60);
+    } else {
+        // If no local match, fetch as seed to expand neighborhood
+        fetchGraph(query);
+    }
 }
 
 async function uploadFile() {
@@ -199,6 +224,14 @@ async function uploadFile() {
     const files = fileInput.files;
     if (!files || files.length === 0) return;
     await uploadFiles(files);
+
+    // Style for highlight
+    cy.style().selector('.highlight').style({
+        'background-color': '#f1c40f',
+        'border-color': '#e67e22',
+        'line-color': '#e67e22',
+        'target-arrow-color': '#e67e22'
+    }).update();
     fileInput.value = '';
 }
 

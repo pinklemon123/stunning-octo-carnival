@@ -66,6 +66,16 @@
                     </a>
                 </div>
 
+                <!-- Layout Toggle -->
+                <div class="control-group" style="margin-top: 10px;">
+                    <select id="layout-select" class="styled-select" onchange="applyLayoutFromSelect()">
+                        <option value="fcose">fcose (auto)</option>
+                        <option value="cose">cose</option>
+                        <option value="grid">grid</option>
+                        <option value="concentric">concentric</option>
+                    </select>
+                </div>
+
                 <!-- URL Import -->
                 <div class="control-group" style="margin-top: 10px;">
                     <input type="text" id="url-input" placeholder="Import from URL...">
