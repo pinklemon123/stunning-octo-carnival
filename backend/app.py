@@ -597,7 +597,7 @@ def entity_merge():
                 WITH f
                 DETACH DELETE f
                 """,
-                from=from_name, into=into_name
+                parameters={"from": from_name, "into": into_name}
             )
         return jsonify({"status": "success"})
     except Exception as e:
