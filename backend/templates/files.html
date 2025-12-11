@@ -121,6 +121,11 @@
                         title="View Graph">
                         <i class="fa-solid fa-eye"></i>
                     </a>
+                    <button onclick="deleteSource('{{ file }}')" class="icon-btn"
+                        style="background-color: #e74c3c; color: white; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer;"
+                        title="Delete from Graph">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
                 </div>
             </div>
             {% endfor %}
@@ -132,6 +137,30 @@
             {% endif %}
         </div>
     </div>
+
+    <script>
+        async function deleteSource(source) {
+            if (!confirm(`确认删除来源: ${source} 的关系与孤立节点吗？`)) return;
+            try {
+                const res = await fetch('/api/source/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_doc: source })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alert('删除失败: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+                alert(`删除成功\n关系: ${data.deleted_rels}\n节点: ${data.deleted_nodes}`);
+                // Reload page to refresh list
+                location.reload();
+            } catch (err) {
+                console.error('Delete failed:', err);
+                alert('删除失败: ' + err.message);
+            }
+        }
+    </script>
 
 </body>
 

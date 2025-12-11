@@ -271,51 +271,90 @@ def files():
     sources = get_source_documents()
     return render_template("files.html", files=sources)
 
+from ingestion import parse_file, scrape_url
+
 @app.route("/api/upload", methods=["POST"])
 def upload_file():
     try:
-        if 'file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
+        if 'files' not in request.files:
+            return jsonify({"error": "No files part"}), 400
+        
+        files = request.files.getlist('files')
+        if not files or files[0].filename == '':
+            return jsonify({"error": "No selected files"}), 400
             
-        content = file.read()
+        total_triples = 0
+        processed_files = []
         
-        # Try to decode with UTF-8, fallback to other encodings
-        try:
-            text = content.decode("utf-8")
-        except UnicodeDecodeError:
+        for file in files:
             try:
-                text = content.decode("gbk")  # Try GBK for Chinese text
-            except UnicodeDecodeError:
-                text = content.decode("latin-1")  # Fallback
+                print(f"Processing file: {file.filename}")
+                text = parse_file(file, file.filename)
+                
+                if not text.strip():
+                    print(f"⚠️ Empty text extracted from {file.filename}")
+                    continue
+                    
+                # 增加处理长度限制
+                max_length = 8000
+                text_to_process = text[:max_length]
+                if len(text) > max_length:
+                    print(f"⚠️ Text truncated from {len(text)} to {max_length} characters")
+                
+                print(f"📝 Sending to LLM for extraction...")
+                triples = run_extraction(text_to_process, file.filename)
+                print(f"✅ Extracted {len(triples)} triples from {file.filename}")
+                
+                ingest_triples(triples)
+                total_triples += len(triples)
+                processed_files.append(file.filename)
+                
+            except Exception as e:
+                print(f"Error processing {file.filename}: {e}")
+                # Continue with other files even if one fails
+                continue
         
-        print(f"Processing file: {file.filename}, length: {len(text)}")
-        
-        # 增加处理长度限制，并显示处理的文本片段
-        max_length = 8000
-        text_to_process = text[:max_length]
-        if len(text) > max_length:
-            print(f"⚠️ Text truncated from {len(text)} to {max_length} characters")
-        
-        print(f"📝 Sending to LLM for extraction...")
-        triples = run_extraction(text_to_process, file.filename)
-        print(f"✅ Extracted {len(triples)} triples")
-        
-        # 显示提取的三元组（用于调试）
-        for i, triple in enumerate(triples[:5], 1):  # 只显示前5个
-            print(f"  {i}. ({triple['subject']}) --[{triple['predicate']}]--> ({triple['object']})")
-        if len(triples) > 5:
-            print(f"  ... and {len(triples) - 5} more triples")
-        
-        ingest_triples(triples)
-        
-        return jsonify({"status": "success", "triples_count": len(triples)})
+        return jsonify({
+            "status": "success", 
+            "triples_count": total_triples,
+            "processed_files": processed_files
+        })
     except Exception as e:
         print(f"Upload error: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/url", methods=["POST"])
+def extract_from_url():
+    try:
+        data = request.json
+        url = data.get("url")
+        if not url:
+            return jsonify({"error": "No URL provided"}), 400
+            
+        print(f"Processing URL: {url}")
+        text = scrape_url(url)
+        
+        if not text.strip():
+            return jsonify({"error": "Could not extract text from URL"}), 400
+            
+        max_length = 8000
+        text_to_process = text[:max_length]
+        
+        print(f"📝 Sending to LLM for extraction...")
+        triples = run_extraction(text_to_process, url)
+        print(f"✅ Extracted {len(triples)} triples from URL")
+        
+        ingest_triples(triples)
+        
+        return jsonify({
+            "status": "success", 
+            "triples_count": len(triples),
+            "source": url
+        })
+    except Exception as e:
+        print(f"URL processing error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/graph", methods=["GET"])
@@ -356,6 +395,54 @@ def chat():
     response = llm.invoke(messages)
     
     return jsonify({"reply": response.content, "context": context_facts})
+
+@app.route("/api/source/delete", methods=["POST"])
+def delete_source():
+    try:
+        data = request.json or {}
+        source_doc = data.get("source_doc")
+        if not source_doc:
+            return jsonify({"error": "source_doc is required"}), 400
+
+        if not NEO4J_AVAILABLE:
+            # When DB is unavailable, mimic success but with zero counts
+            return jsonify({"status": "skipped", "deleted_rels": 0, "deleted_nodes": 0})
+
+        with driver.session() as session:
+            # Delete relationships by source_doc
+            rel_result = session.run(
+                """
+                MATCH ()-[r]->()
+                WHERE r.source_doc = $source_doc
+                WITH r LIMIT 10000
+                DELETE r
+                RETURN count(*) AS deleted_rels
+                """,
+                source_doc=source_doc,
+            ).single()
+            deleted_rels = rel_result["deleted_rels"] if rel_result else 0
+
+            # Optionally delete orphan nodes (no remaining relationships)
+            node_result = session.run(
+                """
+                MATCH (e:Entity)
+                WHERE NOT (e)--()
+                WITH e LIMIT 10000
+                DELETE e
+                RETURN count(*) AS deleted_nodes
+                """
+            ).single()
+            deleted_nodes = node_result["deleted_nodes"] if node_result else 0
+
+        return jsonify({
+            "status": "success",
+            "source_doc": source_doc,
+            "deleted_rels": deleted_rels,
+            "deleted_nodes": deleted_nodes,
+        })
+    except Exception as e:
+        print(f"Delete source error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
