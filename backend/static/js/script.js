@@ -4,6 +4,31 @@ let selectedNodeId = null;
 document.addEventListener('DOMContentLoaded', function () {
     initCytoscape();
 
+    // Drag & drop upload wiring
+    const dropZone = document.getElementById('drop-zone');
+    const showDrop = () => { if (dropZone) dropZone.classList.remove('hidden'); };
+    const hideDrop = () => { if (dropZone) dropZone.classList.add('hidden'); };
+    ['dragenter','dragover'].forEach(evtName => {
+        document.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showDrop();
+        });
+    });
+    ['dragleave','drop'].forEach(evtName => {
+        document.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (evtName === 'drop') {
+                const files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length) {
+                    uploadFiles(files);
+                }
+            }
+            hideDrop();
+        });
+    });
+
     // Check for URL parameters (e.g. ?source=test.txt)
     const urlParams = new URLSearchParams(window.location.search);
     const sourceParam = urlParams.get('source');
@@ -171,38 +196,72 @@ function searchGraph() {
 
 async function uploadFile() {
     const fileInput = document.getElementById('file-upload');
-    const file = fileInput.files[0];
-    if (!file) return;
+    const files = fileInput.files;
+    if (!files || files.length === 0) return;
+    await uploadFiles(files);
+    fileInput.value = '';
+}
 
+async function uploadFiles(files) {
+    if (!files || files.length === 0) return;
     const formData = new FormData();
-    formData.append('file', file);
+    for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
 
     showLoading(true);
     try {
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-
+        const response = await fetch('/api/upload', { method: 'POST', body: formData });
         const result = await response.json();
-
         if (!response.ok) {
-            // Handle error response
             alert('Upload failed: ' + (result.error || 'Unknown error'));
             console.error('Upload error:', result);
         } else {
-            // Handle success response
             const count = result.triples_count || 0;
-            alert(`Upload complete. Triples extracted: ${count}`);
-            console.log('Upload success:', result);
+            const processed = result.processed_files ? result.processed_files.join(', ') : 'files';
+            alert(`Upload complete. Processed: ${processed}\nTriples extracted: ${count}`);
             refreshGraph();
+            setTimeout(() => location.reload(), 1000);
         }
     } catch (error) {
         console.error('Upload failed:', error);
         alert('Upload failed: ' + error.message);
     } finally {
         showLoading(false);
-        fileInput.value = '';
+    }
+}
+
+function triggerFileSelect() {
+    const fileInput = document.getElementById('file-upload');
+    if (fileInput) fileInput.click();
+}
+
+async function processUrl() {
+    const urlInput = document.getElementById('url-input');
+    const url = urlInput.value.trim();
+    if (!url) return;
+
+    showLoading(true);
+    try {
+        const response = await fetch('/api/url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert('URL processing failed: ' + (result.error || 'Unknown error'));
+        } else {
+            alert(`URL processed successfully.\nTriples extracted: ${result.triples_count}`);
+            refreshGraph();
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (error) {
+        console.error('URL processing failed:', error);
+        alert('Error: ' + error.message);
+    } finally {
+        showLoading(false);
+        urlInput.value = '';
     }
 }
 

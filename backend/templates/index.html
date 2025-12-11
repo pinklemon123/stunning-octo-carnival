@@ -23,7 +23,7 @@
 
 <body>
 
-    <div class="container">
+    <div class="app-container">
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
@@ -31,21 +31,16 @@
             </div>
 
             <div class="controls">
+                <!-- Search -->
                 <div class="control-group">
                     <input type="text" id="search-input" placeholder="Search nodes...">
                     <button onclick="searchGraph()" class="icon-btn"><i
                             class="fa-solid fa-magnifying-glass"></i></button>
                 </div>
 
+                <!-- Source Filter -->
                 <div class="control-group">
-                    <input type="file" id="file-upload" accept=".txt,.md">
-                    <button onclick="uploadFile()" class="icon-btn" title="Upload"><i
-                            class="fa-solid fa-cloud-arrow-up"></i></button>
-                </div>
-
-                <div class="control-group">
-                    <select id="source-filter" onchange="searchGraph()"
-                        style="flex: 1; padding: 10px 14px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 0.9rem; outline: none; cursor: pointer;">
+                    <select id="source-filter" onchange="searchGraph()" class="styled-select">
                         <option value="">All Sources</option>
                         {% for source in sources %}
                         <option value="{{ source }}">{{ source }}</option>
@@ -53,47 +48,71 @@
                     </select>
                 </div>
 
+                <!-- Actions -->
                 <div class="control-group">
-                    <button onclick="refreshGraph()" class="refresh-btn" style="flex: 1;">
-                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    <button onclick="refreshGraph()" class="refresh-btn" title="Refresh Graph">
+                        <i class="fa-solid fa-rotate-right"></i>
                     </button>
-                    <button onclick="clearGraph()" class="refresh-btn"
-                        style="flex: 1; background-color: #ef4444; color: white; border-color: #ef4444;">
-                        <i class="fa-solid fa-trash"></i> Clear
+                    <button onclick="clearGraph()" class="refresh-btn danger-btn" title="Clear Graph">
+                        <i class="fa-solid fa-trash"></i>
                     </button>
+                    <button onclick="triggerFileSelect()" class="refresh-btn" title="Upload Files"
+                        style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-upload"></i>
+                    </button>
+                    <a href="/files" class="refresh-btn" title="Manage Files"
+                        style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </a>
                 </div>
 
+                <!-- URL Import -->
                 <div class="control-group" style="margin-top: 10px;">
-                    <a href="/files" class="refresh-btn"
-                        style="text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: var(--sidebar-bg); color: var(--text-primary);">
-                        <i class="fa-solid fa-folder-open"></i> Manage Files
-                    </a>
+                    <input type="text" id="url-input" placeholder="Import from URL...">
+                    <button onclick="processUrl()" class="icon-btn"><i class="fa-solid fa-globe"></i></button>
                 </div>
             </div>
 
+            <!-- Minimized Chat -->
             <div class="chat-container">
                 <div class="chat-header" id="chat-header">
                     <i class="fa-regular fa-comments"></i> AI Assistant
                 </div>
                 <div class="chat-history" id="chat-history">
                     <div class="message assistant">
-                        Hello! I'm your knowledge graph assistant. Upload a document to extract knowledge, or ask me
-                        questions about the graph.
+                        Hi! Drag & drop files to the graph to start.
                     </div>
                 </div>
                 <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Ask something about the graph...">
+                    <input type="text" id="chat-input" placeholder="Ask AI...">
                     <button onclick="sendMessage()" class="icon-btn"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
 
         <!-- Main Graph Area -->
-        <div class="graph-area">
+        <div class="main-content">
             <div id="cy"></div>
-            <div id="loading" class="loading" style="display:none;">Processing...</div>
+
+            <!-- Drag & Drop Overlay -->
+            <div id="drop-zone" class="drop-zone hidden">
+                <div class="drop-content">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <h3>Drop files here to upload</h3>
+                    <p>Supports .txt, .md, .pdf, .docx, .pptx, .html</p>
+                </div>
+            </div>
+
+            <div id="loading" class="loading" style="display:none;">
+                <div class="spinner"></div>
+                <span>Processing...</span>
+            </div>
         </div>
     </div>
+
+    <!-- Hidden File Input for Button Click Fallback if needed -->
+    <input type="file" id="file-upload" accept=".txt,.md,.pdf,.docx,.pptx,.html" multiple style="display: none;"
+        onchange="uploadFile()">
 
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
