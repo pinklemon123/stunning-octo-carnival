@@ -8,6 +8,7 @@
     --border-color: #334155;
     --input-bg: #334155;
     --success-color: #10b981;
+    --danger-color: #ef4444;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --glass-bg: rgba(30, 41, 59, 0.7);
@@ -23,32 +24,39 @@ body {
     overflow: hidden;
 }
 
-.container {
-    display: flex;
+.app-container {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+        "sidebar header"
+        "sidebar main";
     height: 100%;
+    width: 100%;
 }
 
 /* Sidebar */
 .sidebar {
-    width: 380px;
+    grid-area: sidebar;
+    width: 320px;
     background-color: var(--sidebar-bg);
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-md);
-    z-index: 10;
-    transition: all 0.3s ease;
+    z-index: 20;
+    flex-shrink: 0;
 }
 
 .sidebar-header {
-    padding: 24px;
+    padding: 20px;
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
     border-bottom: 1px solid var(--border-color);
 }
 
 .sidebar h2 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
     background: linear-gradient(to right, #818cf8, #c084fc);
     -webkit-background-clip: text;
@@ -58,14 +66,13 @@ body {
     gap: 10px;
 }
 
-/* Controls Section */
+/* Controls */
 .controls {
-    padding: 20px;
+    padding: 15px;
     border-bottom: 1px solid var(--border-color);
-    background: rgba(255, 255, 255, 0.02);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
 }
 
 .control-group {
@@ -73,77 +80,43 @@ body {
     gap: 8px;
 }
 
-input[type="text"], 
-input[type="file"] {
+input[type="text"],
+select {
     flex: 1;
-    padding: 10px 14px;
+    padding: 8px 12px;
     background-color: var(--input-bg);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 6px;
     color: var(--text-primary);
-    font-size: 0.9rem;
-    transition: all 0.2s;
+    font-size: 0.85rem;
     outline: none;
 }
 
-input[type="text"]:focus {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-}
-
-input[type="file"] {
-    font-size: 0.8rem;
-    cursor: pointer;
-}
-
-input[type="file"]::file-selector-button {
-    background-color: var(--accent-color);
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    margin-right: 10px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-input[type="file"]::file-selector-button:hover {
-    background-color: var(--accent-hover);
-}
-
 button {
-    padding: 10px 16px;
+    padding: 8px 12px;
     background-color: var(--accent-color);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
-    font-weight: 500;
     transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
 }
 
 button:hover {
     background-color: var(--accent-hover);
-    transform: translateY(-1px);
-}
-
-button:active {
-    transform: translateY(0);
 }
 
 .icon-btn {
-    padding: 10px;
-    min-width: 42px;
+    padding: 8px;
+    min-width: 36px;
 }
 
 .refresh-btn {
-    width: 100%;
+    flex: 1;
     background-color: var(--input-bg);
-    border: 1px solid var(--border-color);
     color: var(--text-secondary);
 }
 
@@ -152,7 +125,16 @@ button:active {
     color: var(--text-primary);
 }
 
-/* Chat Section */
+.danger-btn {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+.danger-btn:hover {
+    background-color: #dc2626;
+}
+
+/* Chat (Minimized) */
 .chat-container {
     flex: 1;
     display: flex;
@@ -162,9 +144,8 @@ button:active {
 }
 
 .chat-header {
-    padding: 16px 20px;
-    background: var(--sidebar-bg);
-    font-size: 0.95rem;
+    padding: 12px 15px;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-color);
@@ -176,68 +157,76 @@ button:active {
 .chat-history {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 15px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    scroll-behavior: smooth;
-}
-
-.chat-history::-webkit-scrollbar {
-    width: 6px;
-}
-
-.chat-history::-webkit-scrollbar-thumb {
-    background-color: var(--border-color);
-    border-radius: 3px;
+    gap: 12px;
 }
 
 .message {
-    max-width: 85%;
-    padding: 12px 16px;
-    border-radius: 12px;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    position: relative;
-    animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    max-width: 90%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    line-height: 1.4;
 }
 
 .message.user {
     align-self: flex-end;
-    background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+    background: var(--accent-color);
     color: white;
-    border-bottom-right-radius: 4px;
-    box-shadow: var(--shadow-sm);
 }
 
 .message.assistant {
     align-self: flex-start;
     background-color: var(--input-bg);
     color: var(--text-primary);
-    border-bottom-left-radius: 4px;
-    border: 1px solid var(--border-color);
 }
 
 .chat-input-area {
-    padding: 20px;
+    padding: 15px;
     border-top: 1px solid var(--border-color);
-    background: var(--sidebar-bg);
     display: flex;
-    gap: 10px;
+    gap: 8px;
 }
 
-/* Graph Area */
-.graph-area {
-    flex: 1;
+/* Main Content & Graph */
+.main-content {
+    grid-area: main;
     position: relative;
     background-color: var(--bg-color);
     background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
     background-size: 24px 24px;
+    overflow: hidden;
+}
+
+/* Top header bar */
+.topbar {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border-color);
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+.toolbar-group {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+/* Compact control groups */
+.controls .control-group {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
 }
 
 #cy {
@@ -245,34 +234,82 @@ button:active {
     height: 100%;
 }
 
-.loading {
+/* Drag & Drop Overlay */
+.drop-zone {
     position: absolute;
-    top: 24px;
-    right: 24px;
-    background: rgba(15, 23, 42, 0.9);
-    color: var(--text-primary);
-    padding: 10px 20px;
-    border-radius: 30px;
-    font-size: 0.9rem;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
-    gap: 10px;
-    backdrop-filter: blur(4px);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-md);
-    z-index: 100;
+    justify-content: center;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
 }
 
-.loading::before {
-    content: "";
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--accent-color);
+.drop-zone.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.drop-content {
+    text-align: center;
+    color: var(--text-primary);
+    border: 2px dashed var(--accent-color);
+    padding: 40px;
+    border-radius: 16px;
+    background: rgba(30, 41, 59, 0.5);
+}
+
+.drop-content i {
+    font-size: 3rem;
+    color: var(--accent-color);
+    margin-bottom: 16px;
+}
+
+.drop-content h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.5rem;
+}
+
+.drop-content p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+/* Loading Spinner */
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(15, 23, 42, 0.9);
+    padding: 20px 40px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+    border: 1px solid var(--border-color);
+}
+
+.spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid var(--accent-color);
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
