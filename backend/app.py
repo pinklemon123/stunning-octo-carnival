@@ -271,6 +271,10 @@ def files():
     sources = get_source_documents()
     return render_template("files.html", files=sources)
 
+@app.route("/review")
+def review_page():
+    return render_template("review.html")
+
 from ingestion import parse_file, scrape_url
 
 @app.route("/api/upload", methods=["POST"])
@@ -362,7 +366,26 @@ def get_graph():
     seed_id = request.args.get("seed_id")
     depth = int(request.args.get("depth", 1))
     source_doc = request.args.get("source")
+    # Optional confidence filter
+    try:
+        min_conf = request.args.get("min_confidence")
+        min_conf = float(min_conf) if min_conf is not None else None
+    except Exception:
+        min_conf = None
+
     data = get_subgraph(seed_id, depth, source_doc)
+    if min_conf is not None:
+        # Filter edges by confidence and rebuild nodes accordingly
+        filtered_edges = []
+        node_ids = set()
+        for e in data.get("edges", []):
+            conf = e["data"].get("confidence")
+            if conf is None or conf >= min_conf:
+                filtered_edges.append(e)
+                node_ids.add(e["data"]["source"]) 
+                node_ids.add(e["data"]["target"]) 
+        filtered_nodes = [n for n in data.get("nodes", []) if n["data"]["id"] in node_ids]
+        data = {"nodes": filtered_nodes, "edges": filtered_edges}
     return jsonify(data)
 
 @app.route("/api/chat", methods=["POST"])
@@ -442,6 +465,143 @@ def delete_source():
         })
     except Exception as e:
         print(f"Delete source error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/relations", methods=["GET"])
+def list_relations():
+    source_doc = request.args.get("source")
+    limit = int(request.args.get("limit", 100))
+    min_conf = request.args.get("min_confidence")
+    try:
+        min_conf = float(min_conf) if min_conf is not None else None
+    except Exception:
+        min_conf = None
+
+    if not NEO4J_AVAILABLE:
+        return jsonify({"relations": []})
+
+    where = []
+    if source_doc:
+        where.append("r.source_doc = $source_doc")
+    if min_conf is not None:
+        where.append("r.confidence >= $min_conf")
+    where_clause = ("WHERE " + " AND ".join(where)) if where else ""
+
+    query = f"""
+    MATCH (a:Entity)-[r:REL]->(b:Entity)
+    {where_clause}
+    RETURN a.name AS subject, r.predicate AS predicate, b.name AS object, r.confidence AS confidence, r.source_doc AS source_doc, r.span AS span, type(r) AS type
+    LIMIT $limit
+    """
+    rels = []
+    with driver.session() as session:
+        result = session.run(query, source_doc=source_doc, min_conf=min_conf, limit=limit)
+        for record in result:
+            edge_id = f"{record['subject']}_{record['predicate']}_{record['object']}"
+            rels.append({
+                "edge_id": edge_id,
+                "subject": record["subject"],
+                "predicate": record["predicate"],
+                "object": record["object"],
+                "confidence": record["confidence"],
+                "source_doc": record["source_doc"],
+                "span": record["span"],
+            })
+    return jsonify({"relations": rels})
+
+@app.route("/api/relation/delete", methods=["POST"])
+def relation_delete():
+    data = request.json or {}
+    edge_id = data.get("edge_id")
+    if not edge_id:
+        return jsonify({"error": "edge_id is required"}), 400
+    if not NEO4J_AVAILABLE:
+        return jsonify({"status": "skipped", "deleted": 0})
+    try:
+        # edge_id format: subject_predicate_object
+        try:
+            subject, predicate, object_ = edge_id.split("_", 2)
+        except ValueError:
+            return jsonify({"error": "invalid edge_id format"}), 400
+        with driver.session() as session:
+            result = session.run(
+                """
+                MATCH (a:Entity {name: $subject})-[r:REL {predicate: $predicate}]->(b:Entity {name: $object})
+                DELETE r
+                RETURN 1 AS ok
+                """,
+                subject=subject, predicate=predicate, object=object_
+            ).single()
+        return jsonify({"status": "success", "deleted": 1})
+    except Exception as e:
+        print(f"Relation delete error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/relation/update", methods=["POST"])
+def relation_update():
+    data = request.json or {}
+    edge_id = data.get("edge_id")
+    confidence = data.get("confidence")
+    if edge_id is None or confidence is None:
+        return jsonify({"error": "edge_id and confidence are required"}), 400
+    try:
+        confidence = float(confidence)
+    except Exception:
+        return jsonify({"error": "confidence must be a number"}), 400
+    if not NEO4J_AVAILABLE:
+        return jsonify({"status": "skipped"})
+    try:
+        subject, predicate, object_ = edge_id.split("_", 2)
+        with driver.session() as session:
+            session.run(
+                """
+                MATCH (a:Entity {name: $subject})-[r:REL {predicate: $predicate}]->(b:Entity {name: $object})
+                SET r.confidence = $confidence
+                RETURN 1 AS ok
+                """,
+                subject=subject, predicate=predicate, object=object_, confidence=confidence
+            )
+        return jsonify({"status": "success"})
+    except Exception as e:
+        print(f"Relation update error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/entity/merge", methods=["POST"])
+def entity_merge():
+    data = request.json or {}
+    from_name = data.get("from")
+    into_name = data.get("into")
+    if not from_name or not into_name:
+        return jsonify({"error": "from and into are required"}), 400
+    if not NEO4J_AVAILABLE:
+        return jsonify({"status": "skipped"})
+    try:
+        with driver.session() as session:
+            # Redirect relationships from `from` to `into`
+            session.run(
+                """
+                MATCH (f:Entity {name: $from})
+                MATCH (t:Entity {name: $into})
+                // incoming
+                MATCH (a)-[r1:REL]->(f)
+                MERGE (a)-[r1n:REL {predicate: r1.predicate}]->(t)
+                SET r1n += {confidence: r1.confidence, source_doc: r1.source_doc, span: r1.span}
+                DELETE r1
+                // outgoing
+                WITH f, t
+                MATCH (f)-[r2:REL]->(b)
+                MERGE (t)-[r2n:REL {predicate: r2.predicate}]->(b)
+                SET r2n += {confidence: r2.confidence, source_doc: r2.source_doc, span: r2.span}
+                DELETE r2
+                // delete from node
+                WITH f
+                DETACH DELETE f
+                """,
+                from=from_name, into=into_name
+            )
+        return jsonify({"status": "success"})
+    except Exception as e:
+        print(f"Entity merge error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":

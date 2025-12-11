@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Relations - GraphMind AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .review-container { padding: 40px; max-width: 1000px; margin: 0 auto; color: var(--text-primary); }
+    .review-header { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
+    .relation-list { border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; }
+    .relation-item { display: grid; grid-template-columns: 2fr 1fr 2fr 1fr 2fr 120px; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+    .relation-item:last-child { border-bottom: none; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .styled-input { padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--sidebar-bg); color: var(--text-primary); }
+    .styled-select { padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--sidebar-bg); color: var(--text-primary); }
+    .toolbar { display: flex; gap: 10px; margin-bottom: 12px; }
+    .merge-box { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="review-container">
+    <div class="review-header">
+      <h2 style="margin:0">Review & Audit</h2>
+      <a href="/" class="back-btn" style="margin-left:auto"><i class="fa-solid fa-arrow-left"></i> Back to Graph</a>
+    </div>
+
+    <div class="toolbar">
+      <input id="filter-source" class="styled-input" placeholder="Filter by source_doc">
+      <input id="filter-minconf" class="styled-input" placeholder="Min confidence (e.g. 0.5)">
+      <button class="icon-btn" onclick="loadRelations()"><i class="fa-solid fa-filter"></i></button>
+    </div>
+
+    <div class="relation-list" id="relation-list"></div>
+
+    <div class="merge-box">
+      <span>Merge entity:</span>
+      <input id="merge-from" class="styled-input" placeholder="from">
+      <span>into</span>
+      <input id="merge-into" class="styled-input" placeholder="into">
+      <button class="icon-btn" onclick="mergeEntity()" title="Merge"><i class="fa-solid fa-object-group"></i></button>
+    </div>
+  </div>
+
+  <script>
+    async function loadRelations() {
+      const src = document.getElementById('filter-source').value.trim();
+      const minc = document.getElementById('filter-minconf').value.trim();
+      const params = new URLSearchParams();
+      if (src) params.set('source', src);
+      if (minc) params.set('min_confidence', minc);
+      const res = await fetch(`/api/relations?${params.toString()}`);
+      const data = await res.json();
+      const list = document.getElementById('relation-list');
+      list.innerHTML = '';
+      (data.relations || []).forEach(rel => {
+        const row = document.createElement('div');
+        row.className = 'relation-item';
+        row.innerHTML = `
+          <div>${rel.subject}</div>
+          <div style="text-align:center">${rel.predicate}</div>
+          <div>${rel.object}</div>
+          <div style="text-align:center">${rel.confidence ?? ''}</div>
+          <div title="${rel.span || ''}">${rel.source_doc || ''}</div>
+          <div class="actions">
+            <button class="icon-btn" title="Delete" onclick="deleteRelation('${rel.edge_id}')"><i class="fa-solid fa-trash"></i></button>
+            <button class="icon-btn" title="Set confidence" onclick="promptConfidence('${rel.edge_id}', ${rel.confidence ?? 'null'})"><i class="fa-solid fa-gauge"></i></button>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    async function deleteRelation(edgeId) {
+      if (!confirm('确认删除该关系吗？')) return;
+      const res = await fetch('/api/relation/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ edge_id: edgeId }) });
+      const data = await res.json();
+      if (!res.ok) { alert('删除失败: ' + (data.error || 'Unknown')); return; }
+      loadRelations();
+    }
+
+    async function promptConfidence(edgeId, current) {
+      const v = prompt('设置新的信度 (0-1):', current ?? '0.8');
+      if (v === null) return;
+      const res = await fetch('/api/relation/update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ edge_id: edgeId, confidence: v }) });
+      const data = await res.json();
+      if (!res.ok) { alert('更新失败: ' + (data.error || 'Unknown')); return; }
+      loadRelations();
+    }
+
+    async function mergeEntity() {
+      const from = document.getElementById('merge-from').value.trim();
+      const into = document.getElementById('merge-into').value.trim();
+      if (!from || !into) { alert('请输入 from 和 into'); return; }
+      const res = await fetch('/api/entity/merge', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ from, into }) });
+      const data = await res.json();
+      if (!res.ok) { alert('合并失败: ' + (data.error || 'Unknown')); return; }
+      alert('合并成功');
+      loadRelations();
+    }
+
+    // initial load
+    loadRelations();
+  </script>
+</body>
+</html>
