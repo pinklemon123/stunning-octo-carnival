@@ -125,7 +125,7 @@ def run_extraction(text: str, source_doc: str) -> List[Dict]:
         if content.startswith("```"):
             content = content[3:]
         if content.endswith("```"):
-            content = content[:-3]
+            content = content[-3:]
         content = content.strip()
         
         print(f"[DEBUG] LLM Response raw content:\n{content[:200]}...")

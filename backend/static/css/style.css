@@ -1,3 +1,350 @@
+/* =====================================================================
+   基础变量（主题色、阴影、背景）
+===================================================================== */
+:root {
+    --bg-color: #0f172a;
+    --card-bg: rgba(255, 255, 255, 0.04);
+    --sidebar-bg: rgba(30, 41, 59, 0.6);
+    --panel-bg: rgba(15, 23, 42, 0.85);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --border-color: #1e293b;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+
+    --shadow-soft: 0 4px 14px rgba(0, 0, 0, 0.25);
+    --blur: blur(18px);
+}
+
+* {
+    box-sizing: border-box;
+    user-select: none;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-color);
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary);
+    overflow: hidden;
+}
+
+/* =====================================================================
+   顶部导航栏
+===================================================================== */
+.topbar {
+    height: 52px;
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 20px;
+}
+
+.brand {
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.topbar-search {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.topbar-search input {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.topbar-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.topbar-actions button,
+.topbar-actions a {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.topbar-actions button:hover,
+.topbar-actions a:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* =====================================================================
+   主布局区域
+===================================================================== */
+.layout {
+    display: grid;
+    grid-template-columns: 260px 1fr; /* 默认两列：左侧栏 + 图区域 */
+    height: calc(100vh - 52px);
+    overflow: hidden;
+    transition: 0.25s ease;
+}
+.layout.detail-open {
+    grid-template-columns: 260px 1fr 320px !important; /* 详情面板打开时三列 */
+}
+
+/* =====================================================================
+   左侧 Sidebar（可折叠 260px）
+===================================================================== */
+.sidebar {
+    width: 260px;
+    background: var(--sidebar-bg);
+    backdrop-filter: var(--blur);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border-right: 1px solid rgba(255,255,255,0.08);
+}
+
+.sidebar-section {
+    background: rgba(255,255,255,0.04);
+    padding: 12px;
+    margin-bottom: 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+.sidebar-title {
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.sidebar input,
+.sidebar select,
+.sidebar button {
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.sidebar input,
+.sidebar select {
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.sidebar button {
+    background: var(--accent);
+    border: none;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.sidebar button:hover {
+    background: var(--accent-hover);
+}
+
+/* =====================================================================
+   中间图谱区域
+===================================================================== */
+.graph-area {
+    position: relative !important;
+    background:
+        radial-gradient(var(--border-color) 1px, transparent 1px),
+        linear-gradient(0deg, var(--bg-color), var(--bg-color));
+    background-size: 38px 38px;
+    overflow: hidden;
+}
+
+#cy {
+    position: absolute;
+    inset: 0; /* fill graph-area completely */
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+
+/* --------------------
+   悬浮图谱工具栏
+-------------------- */
+.graph-toolbar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 20;
+}
+
+.graph-toolbar button {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: var(--blur);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--text-primary);
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.graph-toolbar button:hover {
+    background: var(--accent);
+}
+
+.graph-toolbar .danger {
+    background: var(--danger);
+}
+
+.graph-toolbar .danger:hover {
+    background: var(--danger-hover);
+}
+
+/* =====================================================================
+   拖拽上传区域 Overlay
+===================================================================== */
+.drop-zone {
+    position: absolute;
+    inset: 0;
+    background: rgba(15,23,42,0.75);
+    backdrop-filter: var(--blur);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: 0.3s;
+}
+
+.drop-zone.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.drop-content {
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.drop-content i {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+/* =====================================================================
+   右侧详情面板
+===================================================================== */
+.detail-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 320px; /* 固定宽度 */
+    background: var(--panel-bg);
+    backdrop-filter: var(--blur);
+    border-left: 1px solid rgba(255,255,255,0.06);
+    transition: transform 0.25s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%); /* 默认隐藏在图区域之外 */
+}
+
+.detail-panel.open {
+    transform: translateX(0);
+}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px;
+    font-weight: 600;
+    background: rgba(255,255,255,0.08);
+}
+
+.detail-header button {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.detail-header button:hover {
+    color: var(--text-primary);
+}
+
+.detail-content {
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.detail-section {
+    margin-bottom: 20px;
+    background: rgba(255,255,255,0.05);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.detail-subtitle {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+}
+
+/* 属性显示 */
+#detail-attrs div {
+    padding: 4px 0;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px dashed rgba(255,255,255,0.08);
+}
+
+.relation-item {
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.relation-item:hover {
+    color: var(--accent);
+}
+
+/* 删除按钮 */
+button.danger {
+    background: var(--danger);
+}
+
+button.danger:hover {
+    background: var(--danger-hover);
+}
 :root {
     --bg-color: #0f172a;
     --sidebar-bg: #1e293b;
@@ -35,6 +382,10 @@ body {
     width: 100%;
 }
 
+.app-container.collapsed-sidebar {
+    grid-template-columns: 0 1fr;
+}
+
 /* Sidebar */
 .sidebar {
     grid-area: sidebar;
@@ -46,6 +397,10 @@ body {
     box-shadow: var(--shadow-md);
     z-index: 20;
     flex-shrink: 0;
+}
+
+.app-container.collapsed-sidebar .sidebar {
+    display: none;
 }
 
 .sidebar-header {
@@ -220,6 +575,14 @@ button:hover {
     margin-left: auto;
     display: flex;
     gap: 8px;
+}
+
+.section-title {
+    margin: 8px 0 4px 0;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
 }
 
 /* Compact control groups */
