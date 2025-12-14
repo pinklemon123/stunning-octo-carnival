@@ -1,399 +1,489 @@
-let cy;
+let cy = null;
 let selectedNodeId = null;
-let currentLayout = 'fcose';
 let currentMinConfidence = null;
 
-document.addEventListener('DOMContentLoaded', function () {
-    initCytoscape();
-
-    // Drag & drop upload wiring
-    const dropZone = document.getElementById('drop-zone');
-    const showDrop = () => { if (dropZone) dropZone.classList.remove('hidden'); };
-    const hideDrop = () => { if (dropZone) dropZone.classList.add('hidden'); };
-    ['dragenter','dragover'].forEach(evtName => {
-        document.addEventListener(evtName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            showDrop();
-        });
-    });
-    ['dragleave','drop'].forEach(evtName => {
-        document.addEventListener(evtName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (evtName === 'drop') {
-                const files = e.dataTransfer && e.dataTransfer.files;
-                if (files && files.length) {
-                    uploadFiles(files);
-                }
-            }
-            hideDrop();
-        });
-    });
-
-    // Check for URL parameters (e.g. ?source=test.txt)
-    const urlParams = new URLSearchParams(window.location.search);
-    const sourceParam = urlParams.get('source');
-
-    if (sourceParam) {
-        document.getElementById('source-filter').value = sourceParam;
-        // We can call fetchGraph directly, which will read the input we just set
-        fetchGraph();
-    } else {
-        refreshGraph();
-    }
-
-    // Enter key support
-    document.getElementById('chat-input').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') sendMessage();
-    });
-    document.getElementById('search-input').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') searchGraph();
-    });
-    // Also allow Enter on source filter
-    document.getElementById('source-filter').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') searchGraph();
-    });
+document.addEventListener('DOMContentLoaded', () => {
+  initCytoscape();
+  wireUi();
+  refreshGraph();
 });
 
+function wireUi() {
+  window.addEventListener('resize', () => {
+    if (cy) {
+      cy.resize();
+    }
+  });
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const sourceParam = urlParams.get('source');
+  if (sourceParam) {
+    const sel = document.getElementById('source-filter');
+    if (sel) sel.value = sourceParam;
+  }
+
+  const gSearch = document.getElementById('global-search');
+  if (gSearch) {
+    gSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') localSearch(gSearch.value.trim());
+    });
+  }
+
+  const sInput = document.getElementById('search-input');
+  if (sInput) {
+    sInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') localSearch(sInput.value.trim());
+    });
+  }
+
+  const minConf = document.getElementById('min-conf');
+  if (minConf) {
+    minConf.addEventListener('change', () => {
+      const v = minConf.value;
+      if (v === '') {
+        currentMinConfidence = null;
+      } else {
+        const n = Number(v);
+        currentMinConfidence = Number.isFinite(n) ? n : null;
+      }
+      refreshGraph();
+    });
+  }
+
+  const srcSel = document.getElementById('source-filter');
+  if (srcSel) {
+    srcSel.addEventListener('change', () => refreshGraph());
+  }
+
+  const dropZone = document.getElementById('drop-zone');
+  const showDrop = () => { if (dropZone) dropZone.classList.add('active'); };
+  const hideDrop = () => { if (dropZone) dropZone.classList.remove('active'); };
+  ['dragenter', 'dragover'].forEach((evt) => {
+    document.addEventListener(evt, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showDrop();
+    });
+  });
+  ['dragleave', 'drop'].forEach((evt) => {
+    document.addEventListener(evt, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (evt === 'drop') {
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files.length) uploadFiles(files);
+      }
+      hideDrop();
+    });
+  });
+}
+
 function initCytoscape() {
-    cy = cytoscape({
-        container: document.getElementById('cy'),
-        style: [
-            {
-                selector: 'node',
-                style: {
-                    'background-color': '#3498db',
-                    'label': 'data(label)',
-                    'color': '#333',
-                    'text-valign': 'center',
-                    'text-halign': 'center',
-                    'font-size': '12px',
-                    'width': 'label',
-                    'height': 'label',
-                    'padding': '12px',
-                    'text-background-color': '#fff',
-                    'text-background-opacity': 0.7,
-                    'text-background-padding': '2px'
-                }
-            },
-            {
-                selector: 'edge',
-                style: {
-                    'width': 2,
-                    'line-color': '#ccc',
-                    'target-arrow-color': '#ccc',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier',
-                    'label': 'data(label)',
-                    'font-size': '10px',
-                    'text-rotation': 'autorotate',
-                    'color': '#999'
-                }
-            },
-            {
-                selector: ':selected',
-                style: {
-                    'background-color': '#e74c3c',
-                    'line-color': '#e74c3c',
-                    'target-arrow-color': '#e74c3c',
-                    'source-arrow-color': '#e74c3c'
-                }
-            }
-        ],
-        layout: {
-            name: 'cose', // Fallback if fcose fails to load
-            animate: true
+  const container = document.getElementById('cy');
+  cy = cytoscape({
+    container,
+    style: [
+      {
+        selector: 'node',
+        style: {
+          'shape': 'round-rectangle',
+          'background-color': 'data(color)',
+          'background-opacity': 0.95,
+          'label': 'data(label)',
+          'color': '#f8fafc',
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'font-size': '12px',
+          'text-wrap': 'wrap',
+          'text-max-width': '140px',
+          'text-outline-width': 2,
+          'text-outline-color': '#0b1220',
+          'width': 'label',
+          'height': 'label',
+          'padding': '12px',
+          'corner-radius': 8,
+          'border-width': 1,
+          'border-color': '#1e293b'
         }
-    });
-
-    cy.on('tap', 'node', function (evt) {
-        const node = evt.target;
-        selectedNodeId = node.id();
-        document.getElementById('chat-header').innerText = 'Chatting about: ' + node.data('label');
-        console.log('Selected ' + selectedNodeId);
-
-        // Optional: Expand graph on click
-        fetchGraph(selectedNodeId, true);
-    });
-
-    cy.on('tap', function (evt) {
-        if (evt.target === cy) {
-            selectedNodeId = null;
-            document.getElementById('chat-header').innerText = 'Chat (Global)';
+      },
+      {
+        selector: 'edge',
+        style: {
+          'width': 2,
+          'line-color': '#334155',
+          'target-arrow-color': '#334155',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'bezier',
+          'label': 'data(label)',
+          'font-size': '10px',
+          'text-rotation': 'autorotate',
+          'color': '#94a3b8',
+          'text-background-color': '#0b1220',
+          'text-background-opacity': 0.55,
+          'text-background-padding': '2px'
         }
-    });
+      },
+      { selector: ':selected', style: { 'background-color': '#22d3ee', 'line-color': '#22d3ee', 'target-arrow-color': '#22d3ee' } },
+      { selector: '.cy-highlight', style: { 'background-color': '#f59e0b', 'line-color': '#f59e0b', 'target-arrow-color': '#f59e0b' } },
+      { selector: '.cy-path', style: { 'background-color': '#22c55e', 'line-color': '#22c55e', 'target-arrow-color': '#22c55e' } },
+      { selector: '.cy-neighbor', style: { 'background-color': '#a78bfa', 'line-color': '#a78bfa', 'target-arrow-color': '#a78bfa' } },
+    ],
+    layout: { name: 'cose', animate: true, padding: 50 }
+  });
+
+  cy.on('tap', 'node', (evt) => {
+    const node = evt.target;
+    selectedNodeId = node.id();
+    openDetailPanel(node);
+  });
+
+  cy.on('tap', (evt) => {
+    if (evt.target === cy) {
+      selectedNodeId = null;
+    }
+  });
 }
 
 function clearGraph() {
-    if (cy) {
-        cy.elements().remove();
-    }
-    document.getElementById('chat-header').innerText = 'Chat (Global)';
-    selectedNodeId = null;
+  if (!cy) return;
+  cy.elements().remove();
+  selectedNodeId = null;
+  closeDetailPanel();
 }
 
-async function fetchGraph(seedId = null, merge = false) {
-    showLoading(true);
-    try {
-        let url = '/api/graph';
-        const params = new URLSearchParams();
-
-        if (seedId) params.append('seed_id', seedId);
-
-        const sourceFilter = document.getElementById('source-filter').value.trim();
-        if (sourceFilter) params.append('source', sourceFilter);
-
-        if (currentMinConfidence !== null) params.append('min_confidence', String(currentMinConfidence));
-
-        if (seedId) params.append('depth', '1');
-
-        const queryString = params.toString();
-        if (queryString) url += `?${queryString}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (merge && seedId) {
-            cy.add(data.nodes);
-            cy.add(data.edges);
-        } else {
-            cy.elements().remove();
-            cy.add(data.nodes);
-            cy.add(data.edges);
-        }
-
-        runLayout();
-    } catch (error) {
-        console.error('Error fetching graph:', error);
-    } finally {
-        showLoading(false);
-    }
+function fitGraph() {
+  if (!cy) return;
+  if (cy.elements().length) cy.fit(cy.elements(), 60);
 }
 
-function runLayout() {
-    let layoutName = currentLayout;
-    // Fallback if fcose not available
-    if (layoutName === 'fcose' && typeof cytoscape('core', 'fcose') !== 'function') {
-        layoutName = 'cose';
+function zoomIn() {
+  if (!cy) return;
+  cy.zoom({ level: cy.zoom() * 1.2, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+}
+
+function zoomOut() {
+  if (!cy) return;
+  cy.zoom({ level: cy.zoom() / 1.2, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
+}
+
+function applyLayout(name) {
+  if (!cy) return;
+  const useFcose = name === 'fcose' && typeof cytoscape('core', 'fcose') === 'function';
+  const use = useFcose ? 'fcose' : (name || 'cose');
+  const common = {
+    name: use,
+    animate: true,
+    animationDuration: 650,
+    fit: true,
+    padding: 60
+  };
+  const options = use === 'fcose'
+    ? {
+      ...common,
+      quality: 'default',
+      randomize: true,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 120,
+      edgeElasticity: 0.2,
+      gravity: 0.25
     }
-    const optionsByLayout = {
-        fcose: { name: 'fcose', animate: true, animationDuration: 800, fit: true, padding: 50 },
-        cose: { name: 'cose', animate: true, animationDuration: 800, fit: true, padding: 50 },
-        grid: { name: 'grid', fit: true, padding: 50 },
-        concentric: { name: 'concentric', fit: true, padding: 50 }
+    : {
+      ...common,
+      randomize: true
     };
-    const opts = optionsByLayout[layoutName] || optionsByLayout['cose'];
-    cy.layout(opts).run();
-}
-
-function applyLayoutFromSelect() {
-    const select = document.getElementById('layout-select');
-    if (!select) return;
-    currentLayout = select.value;
-    runLayout();
+  cy.layout(options).run();
 }
 
 function refreshGraph() {
-    selectedNodeId = null;
-    document.getElementById('chat-header').innerText = 'Chat (Global)';
-    fetchGraph();
+  fetchGraph();
 }
 
-function searchGraph() {
-    const query = document.getElementById('search-input').value;
-    // We call fetchGraph, which will pick up both the search input (as seedId if passed) 
-    // and the source filter.
-    // Note: fetchGraph logic above treats the first arg as seedId.
-    // Let's adjust usage.
-    // If query is empty, refresh; else try to highlight existing nodes first.
-    if (!query) {
-        refreshGraph();
-        return;
-    }
-    const matches = cy.nodes().filter(n => (n.data('label') || '').includes(query));
-    if (matches.length > 0) {
-        cy.elements().removeClass('highlight');
-        matches.addClass('highlight');
-        cy.fit(matches, 60);
-    } else {
-        // If no local match, fetch as seed to expand neighborhood
-        fetchGraph(query);
-    }
+async function fetchGraph() {
+  showLoading(true);
+  try {
+    const params = new URLSearchParams();
+    const seedId = (document.getElementById('seed-id')?.value || '').trim();
+    const depthRaw = (document.getElementById('depth')?.value || '1').trim();
+    const depth = Math.max(1, Math.min(4, Number(depthRaw) || 1));
+    const source = document.getElementById('source-filter')?.value || '';
+
+    if (seedId) params.set('seed_id', seedId);
+    params.set('depth', String(depth));
+    if (source) params.set('source', source);
+    if (currentMinConfidence !== null) params.set('min_confidence', String(currentMinConfidence));
+
+    const res = await fetch(`/api/graph?${params.toString()}`);
+    const data = await res.json();
+
+    cy.elements().remove();
+
+    const nodes = (data.nodes || []).map((n) => {
+      const dn = n.data || {};
+      if (!dn.color) dn.color = '#6366f1';
+      return { data: dn };
+    });
+    const edges = (data.edges || []).map((e) => ({ data: (e.data || {}) }));
+
+    cy.add(nodes);
+    cy.add(edges);
+    applyLayout('fcose');
+    fitGraph();
+  } catch (e) {
+    console.error('fetchGraph failed', e);
+    alert('加载图谱失败：' + (e?.message || e));
+  } finally {
+    showLoading(false);
+  }
 }
 
-function applyMinConfidence() {
-    const v = document.getElementById('min-conf-input').value;
-    if (v === '') { currentMinConfidence = null; refreshGraph(); return; }
-    const num = Number(v);
-    if (isNaN(num) || num < 0 || num > 1) { alert('请输入 0-1 之间的数'); return; }
-    currentMinConfidence = num;
-    refreshGraph();
+function localSearch(q) {
+  if (!cy) return;
+  cy.elements().removeClass('cy-highlight');
+  if (!q) return;
+
+  const query = q.toLowerCase();
+  const matches = cy.nodes().filter((n) => ((n.data('label') || '').toLowerCase().includes(query)));
+  if (matches.length) {
+    matches.addClass('cy-highlight');
+    cy.fit(matches, 80);
+  }
 }
 
-async function uploadFile() {
-    const fileInput = document.getElementById('file-upload');
-    const files = fileInput.files;
-    if (!files || files.length === 0) return;
-    await uploadFiles(files);
-
-    // Style for highlight
-    cy.style().selector('.highlight').style({
-        'background-color': '#f1c40f',
-        'border-color': '#e67e22',
-        'line-color': '#e67e22',
-        'target-arrow-color': '#e67e22'
-    }).update();
-    fileInput.value = '';
-}
 async function exportSubgraph() {
-    const seed = document.getElementById('export-seed').value.trim();
-    const depth = Number(document.getElementById('export-depth').value || '1');
-    const source = document.getElementById('source-filter').value.trim();
-    const fmt = document.getElementById('export-format').value;
-    try {
-        const res = await fetch('/api/export', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ seed_id: seed || null, depth: depth, source: source || null, format: fmt })
-        });
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        const url = window.URL.createObjectURL(blob);
-        a.href = url;
-        a.download = `subgraph.${fmt === 'json' ? 'json' : (fmt === 'csv' ? 'csv' : 'graphml')}`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-    } catch (err) {
-        alert('导出失败: ' + err.message);
+  const seed = (document.getElementById('export-seed')?.value || '').trim();
+  const depth = Math.max(1, Math.min(4, Number(document.getElementById('export-depth')?.value || '1') || 1));
+  const source = document.getElementById('source-filter')?.value || null;
+  const fmt = document.getElementById('export-format')?.value || 'json';
+  try {
+    const res = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seed_id: seed || null, depth, source: source || null, format: fmt })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
     }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    const url = window.URL.createObjectURL(blob);
+    a.href = url;
+    a.download = `subgraph.${fmt === 'json' ? 'json' : fmt}`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('导出失败：' + (err?.message || err));
+  }
 }
 
 async function shortestPath() {
-    const s = document.getElementById('sp-source').value.trim();
-    const t = document.getElementById('sp-target').value.trim();
-    if (!s || !t) { alert('请输入两个节点名称'); return; }
-    try {
-        const q = `
-        MATCH (a:Entity {name: $s}), (b:Entity {name: $t}),
-        p = shortestPath((a)-[*]-(b))
-        RETURN p LIMIT 1`;
-        const res = await fetch('/api/cypher', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, params: { s, t } }) });
-        const data = await res.json();
-        if (!res.ok) { alert('查询失败: ' + (data.error || 'Unknown')); return; }
-        // Clear previous highlight
-        cy.elements().removeClass('path-highlight');
-        // Extract nodes/edges from returned path
-        const rows = data.rows || [];
-        if (rows.length === 0) { alert('未找到路径'); return; }
-        // naive approach: refetch graph including both nodes to ensure elements exist
-        await fetchGraph(null, false);
-        const nodesToFit = cy.nodes().filter(n => n.id() === s || n.id() === t);
-        nodesToFit.addClass('path-highlight');
-        cy.style().selector('.path-highlight').style({ 'background-color': '#2ecc71', 'line-color': '#2ecc71', 'target-arrow-color': '#27ae60' }).update();
-        cy.fit(nodesToFit, 80);
-    } catch (err) {
-        alert('最短路径失败: ' + err.message);
+  const start = (document.getElementById('sp-source')?.value || '').trim();
+  const end = (document.getElementById('sp-target')?.value || '').trim();
+  if (!start || !end) {
+    alert('请输入 source 和 target 节点名称');
+    return;
+  }
+
+  showLoading(true);
+  try {
+    const res = await fetch('/api/path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, end, max_depth: 10 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    await fetchGraph();
+    cy.elements().removeClass('cy-path');
+
+    const nodeNames = data.nodes || [];
+    const nodeSet = new Set(nodeNames);
+    cy.nodes().forEach((n) => {
+      const id = n.id();
+      const label = n.data('label');
+      if (nodeSet.has(id) || nodeSet.has(label)) n.addClass('cy-path');
+    });
+
+    // Highlight edges along the path if present
+    if (Array.isArray(data.rels) && data.rels.length && nodeNames.length >= 2) {
+      for (let i = 0; i < nodeNames.length - 1; i++) {
+        const s = nodeNames[i];
+        const t = nodeNames[i + 1];
+        cy.edges().forEach((e) => {
+          const es = e.data('source');
+          const et = e.data('target');
+          if ((es === s && et === t) || (es === t && et === s)) e.addClass('cy-path');
+        });
+      }
     }
+
+    if (nodeNames.length) {
+      const nodes = cy.nodes().filter((n) => nodeSet.has(n.id()) || nodeSet.has(n.data('label')));
+      if (nodes.length) cy.fit(nodes, 90);
+    }
+  } catch (err) {
+    alert('最短路径失败：' + (err?.message || err));
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function uploadFile() {
+  const el = document.getElementById('file-upload');
+  if (!el || !el.files || !el.files.length) return;
+  await uploadFiles(el.files);
+  el.value = '';
 }
 
 async function uploadFiles(files) {
-    if (!files || files.length === 0) return;
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
-
-    showLoading(true);
-    try {
-        const response = await fetch('/api/upload', { method: 'POST', body: formData });
-        const result = await response.json();
-        if (!response.ok) {
-            alert('Upload failed: ' + (result.error || 'Unknown error'));
-            console.error('Upload error:', result);
-        } else {
-            const count = result.triples_count || 0;
-            const processed = result.processed_files ? result.processed_files.join(', ') : 'files';
-            alert(`Upload complete. Processed: ${processed}\nTriples extracted: ${count}`);
-            refreshGraph();
-            setTimeout(() => location.reload(), 1000);
-        }
-    } catch (error) {
-        console.error('Upload failed:', error);
-        alert('Upload failed: ' + error.message);
-    } finally {
-        showLoading(false);
+  if (!files || files.length === 0) return;
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files', files[i]);
+  }
+  showLoading(true);
+  try {
+    const response = await fetch('/api/upload', { method: 'POST', body: formData });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || 'Unknown error');
     }
+    alert(`上传完成：处理文件 ${result.processed_files?.length || 0} 个，三元组 ${result.triples_count || 0} 条`);
+    await fetchGraph();
+  } catch (error) {
+    alert('Upload failed: ' + (error?.message || error));
+  } finally {
+    showLoading(false);
+  }
 }
 
 function triggerFileSelect() {
-    const fileInput = document.getElementById('file-upload');
-    if (fileInput) fileInput.click();
+  const el = document.getElementById('file-upload');
+  if (el) el.click();
 }
 
 async function processUrl() {
-    const urlInput = document.getElementById('url-input');
-    const url = urlInput.value.trim();
-    if (!url) return;
-
-    showLoading(true);
-    try {
-        const response = await fetch('/api/url', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url })
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            alert('URL processing failed: ' + (result.error || 'Unknown error'));
-        } else {
-            alert(`URL processed successfully.\nTriples extracted: ${result.triples_count}`);
-            refreshGraph();
-            setTimeout(() => location.reload(), 1000);
-        }
-    } catch (error) {
-        console.error('URL processing failed:', error);
-        alert('Error: ' + error.message);
-    } finally {
-        showLoading(false);
-        urlInput.value = '';
+  const el = document.getElementById('url-input');
+  const url = (el?.value || '').trim();
+  if (!url) return;
+  showLoading(true);
+  try {
+    const response = await fetch('/api/url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error || 'Unknown error');
     }
+    alert(`URL 导入完成：三元组 ${result.triples_count || 0} 条`);
+    await fetchGraph();
+  } catch (e) {
+    alert('URL 处理失败：' + (e?.message || e));
+  } finally {
+    showLoading(false);
+    if (el) el.value = '';
+  }
 }
 
-async function sendMessage() {
-    const input = document.getElementById('chat-input');
-    const message = input.value.trim();
-    if (!message) return;
+function openDetailPanel(node) {
+  const panel = document.getElementById('detail-panel');
+  const layout = document.getElementById('layout');
+  if (!panel) return;
 
-    addMessage('user', message);
-    input.value = '';
+  panel.classList.add('open');
+  if (layout) layout.classList.add('detail-open');
 
-    try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                node_id: selectedNodeId,
-                message: message
-            })
-        });
-        const data = await response.json();
-        addMessage('assistant', data.reply);
-    } catch (error) {
-        console.error('Chat error:', error);
-        addMessage('assistant', 'Error: Could not reach the assistant.');
-    }
+  const title = document.getElementById('detail-title');
+  if (title) title.innerText = node.data('label') || node.id();
+
+  const attrsEl = document.getElementById('detail-attrs');
+  const outEl = document.getElementById('detail-out');
+  const inEl = document.getElementById('detail-in');
+
+  if (attrsEl) {
+    attrsEl.innerHTML = '';
+    const attrs = node.data() || {};
+    Object.keys(attrs).sort().forEach((k) => {
+      const v = attrs[k];
+      const div = document.createElement('div');
+      div.className = 'kv';
+      div.innerHTML = `<span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(String(v))}</span>`;
+      attrsEl.appendChild(div);
+    });
+  }
+
+  if (outEl) {
+    outEl.innerHTML = '';
+    node.outgoers('edge').forEach((e) => {
+      const t = e.target();
+      const pred = e.data('label') || e.data('predicate') || '';
+      const div = document.createElement('div');
+      div.className = 'relation';
+      div.innerHTML = `<span class="pill">${escapeHtml(pred)}</span><span class="to">→ ${escapeHtml(t.data('label') || t.id())}</span>`;
+      outEl.appendChild(div);
+    });
+  }
+
+  if (inEl) {
+    inEl.innerHTML = '';
+    node.incomers('edge').forEach((e) => {
+      const s = e.source();
+      const pred = e.data('label') || e.data('predicate') || '';
+      const div = document.createElement('div');
+      div.className = 'relation';
+      div.innerHTML = `<span class="from">${escapeHtml(s.data('label') || s.id())} →</span><span class="pill">${escapeHtml(pred)}</span>`;
+      inEl.appendChild(div);
+    });
+  }
 }
 
-function addMessage(role, text) {
-    const history = document.getElementById('chat-history');
-    const div = document.createElement('div');
-    div.className = `message ${role}`;
-    div.innerText = text;
-    history.appendChild(div);
-    history.scrollTop = history.scrollHeight;
+function closeDetailPanel() {
+  const panel = document.getElementById('detail-panel');
+  const layout = document.getElementById('layout');
+  if (panel) panel.classList.remove('open');
+  if (layout) layout.classList.remove('detail-open');
+}
+
+function toggleDetailPanel() {
+  const panel = document.getElementById('detail-panel');
+  const layout = document.getElementById('layout');
+  if (!panel) return;
+  const willOpen = !panel.classList.contains('open');
+  panel.classList.toggle('open');
+  if (layout) layout.classList.toggle('detail-open', willOpen);
+}
+
+function highlightNeighborhood() {
+  if (!cy || !selectedNodeId) return;
+  cy.elements().removeClass('cy-neighbor');
+  const node = cy.$id(selectedNodeId);
+  const neigh = node.closedNeighborhood();
+  neigh.addClass('cy-neighbor');
+  cy.fit(neigh, 90);
+}
+
+function deleteSelectedNode() {
+  if (!cy || !selectedNodeId) return;
+  cy.$id(selectedNodeId).remove();
+  selectedNodeId = null;
+  closeDetailPanel();
 }
 
 function showLoading(show) {
-    document.getElementById('loading').style.display = show ? 'block' : 'none';
+  const el = document.getElementById('loading');
+  if (!el) return;
+  el.style.display = show ? 'flex' : 'none';
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (s) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[s]));
 }

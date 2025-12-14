@@ -279,6 +279,11 @@ def review_page():
 def query_page():
     return render_template("query.html")
 
+
+@app.route("/chat")
+def chat_page():
+    return render_template("chat.html")
+
 from ingestion import parse_file, scrape_url
 
 @app.route("/api/upload", methods=["POST"])
@@ -657,7 +662,8 @@ def entity_rename():
 def run_cypher():
     data = request.json or {}
     query = data.get("query")
-    params = data.get("params") or {}
+    # Backward compatibility: older frontend used `parameters`
+    params = data.get("params") or data.get("parameters") or {}
     if not query:
         return jsonify({"error": "query is required"}), 400
     if not NEO4J_AVAILABLE:
@@ -672,6 +678,50 @@ def run_cypher():
                     row[key] = serialize_neo4j_object(record.get(key))
                 rows.append(row)
         return jsonify({"rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/path", methods=["POST"])
+def api_path():
+    """Compute a shortest path between two Entity names.
+
+    Stable response schema for frontend:
+      {"nodes": ["A", "B", ...], "rels": [{"predicate": "...", "confidence": 0.9, "source_doc": "..."}, ...]}
+    """
+    if not NEO4J_AVAILABLE:
+        return jsonify({"nodes": [], "rels": [], "warning": "Neo4j not available"})
+
+    data = request.json or {}
+    start = (data.get("start") or "").strip()
+    end = (data.get("end") or "").strip()
+    max_depth = int(data.get("max_depth") or 10)
+    max_depth = max(1, min(max_depth, 20))
+
+    if not start or not end:
+        return jsonify({"error": "start/end are required"}), 400
+
+    query = (
+        "MATCH p=shortestPath((a:Entity {name: $s})-[:REL*..$d]-(b:Entity {name: $t})) "
+        "RETURN [n IN nodes(p) | n.name] AS nodes, "
+        "[r IN relationships(p) | {predicate: r.predicate, confidence: r.confidence, source_doc: r.source_doc, span: r.span}] AS rels "
+        "LIMIT 1"
+    )
+    try:
+        rows = []
+        with driver.session() as session:
+            result = session.run(query, s=start, t=end, d=max_depth)
+            for record in result:
+                row = {}
+                for key in record.keys():
+                    row[key] = serialize_neo4j_object(record.get(key))
+                rows.append(row)
+
+        if not rows:
+            return jsonify({"nodes": [], "rels": []})
+
+        row0 = rows[0] or {}
+        return jsonify({"nodes": row0.get("nodes") or [], "rels": row0.get("rels") or []})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 

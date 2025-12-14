@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Chat - GraphMind</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .container { padding: 26px; max-width: 1100px; margin: 0 auto; color: var(--text-primary); }
+    .header { display: flex; gap: 12px; align-items: center; }
+    .header h2 { margin: 0; }
+
+    .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; }
+
+    .controls { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .controls label { font-size: 0.85rem; color: var(--text-secondary); }
+    .controls input { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; color: var(--text-primary); }
+
+    .chat { height: calc(100vh - 230px); min-height: 340px; overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+    .msg { display: grid; grid-template-columns: 32px 1fr; gap: 10px; align-items: start; }
+    .avatar { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.05); color: var(--text-secondary); }
+
+    .bubble { padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+    .msg.user .avatar { background: rgba(99,102,241,0.18); color: var(--text-primary); border-color: rgba(99,102,241,0.25); }
+    .msg.user .bubble { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.18); }
+
+    .meta { margin-top: 6px; font-size: 0.82rem; color: var(--text-secondary); }
+    details { margin-top: 8px; }
+    details summary { cursor: pointer; color: var(--text-secondary); }
+    pre { margin: 8px 0 0 0; padding: 10px; border-radius: 10px; background: rgba(15,23,42,0.55); border: 1px solid rgba(255,255,255,0.06); overflow: auto; }
+
+    .composer { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
+    textarea { width: 100%; min-height: 44px; max-height: 140px; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.06); color: var(--text-primary); }
+    .send { width: 44px; height: 44px; }
+
+    .hint { margin-top: 10px; color: var(--text-secondary); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>AI Chat</h2>
+      <a href="/" class="back-btn" style="margin-left:auto"><i class="fa-solid fa-arrow-left"></i> Back to Graph</a>
+    </div>
+
+    <div class="hint">可选：填写节点名称（node_id）后，AI 会用该节点的 1 跳上下文回答。</div>
+
+    <div class="card" style="margin-top:12px;">
+      <div class="controls">
+        <div>
+          <label for="node-id">node_id（可选，填实体 name）</label>
+          <input id="node-id" placeholder="例如：江泽民" />
+        </div>
+      </div>
+
+      <div id="chat" class="chat" aria-label="Chat history"></div>
+
+      <div class="composer">
+        <textarea id="message" placeholder="输入你的问题，按 Ctrl+Enter 发送"></textarea>
+        <button class="icon-btn send" id="send" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="loading" style="display:none">Loading...</div>
+
+  <script>
+    const chatEl = document.getElementById('chat');
+    const messageEl = document.getElementById('message');
+    const nodeEl = document.getElementById('node-id');
+    const sendBtn = document.getElementById('send');
+    const loadingEl = document.getElementById('loading');
+
+    function setLoading(show) {
+      loadingEl.style.display = show ? 'flex' : 'none';
+    }
+
+    function appendMessage(role, text, extra) {
+      const row = document.createElement('div');
+      row.className = `msg ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.innerHTML = role === 'user' ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-robot"></i>';
+
+      const body = document.createElement('div');
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      body.appendChild(bubble);
+
+      if (extra && (extra.context || extra.raw)) {
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = '查看上下文/原始返回';
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(extra, null, 2);
+        details.appendChild(summary);
+        details.appendChild(pre);
+        meta.appendChild(details);
+        body.appendChild(meta);
+      }
+
+      row.appendChild(avatar);
+      row.appendChild(body);
+      chatEl.appendChild(row);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    async function send() {
+      const message = (messageEl.value || '').trim();
+      const nodeId = (nodeEl.value || '').trim();
+      if (!message) return;
+
+      appendMessage('user', message);
+      messageEl.value = '';
+
+      setLoading(true);
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_id: nodeId || null, message })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+        appendMessage('assistant', data.reply || '', { context: data.context || [], raw: data });
+      } catch (e) {
+        appendMessage('assistant', `请求失败：${e.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    sendBtn.addEventListener('click', send);
+    messageEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    // Initial hint message
+    appendMessage('assistant', '你好！我可以结合知识图谱回答你的问题。你也可以在上方填写 node_id 来限定上下文。');
+  </script>
+</body>
+</html>

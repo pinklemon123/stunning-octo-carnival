@@ -1,175 +1,135 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GraphMind AI</title>
-
-    <!-- Fonts & Icons -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Cytoscape -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
     <script src="https://unpkg.com/layout-base/layout-base.js"></script>
     <script src="https://unpkg.com/cose-base/cose-base.js"></script>
     <script src="https://unpkg.com/cytoscape-fcose/cytoscape-fcose.js"></script>
-
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-
+    <link rel="icon" href="data:,">
+    </head>
 <body>
-
-    <div class="app-container">
-        <div class="topbar">
-            <div class="brand"><i class="fa-solid fa-circle-nodes"></i> GraphMind</div>
-            <div class="toolbar-group">
-                <a href="/query" class="refresh-btn" title="Cypher Query" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-terminal"></i>
-                </a>
-                <a href="/review" class="refresh-btn" title="Review Relations" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-clipboard-check"></i>
-                </a>
-                <a href="/files" class="refresh-btn" title="Manage Files" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-folder-open"></i>
-                </a>
-            </div>
+    <header class="topbar">
+        <a class="brand" href="/" title="Home"><i class="fa-solid fa-circle-nodes"></i> GraphMind</a>
+        <div class="topbar-search">
+            <input type="text" id="global-search" placeholder="Search nodes... (Enter)" />
         </div>
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header" style="display:none"></div>
+        <nav class="topbar-actions" aria-label="Primary">
+            <button class="icon-btn" onclick="toggleDetailPanel()" title="Toggle Details"><i class="fa-solid fa-columns"></i></button>
+            <button class="icon-btn" onclick="refreshGraph()" title="Refresh Graph"><i class="fa-solid fa-rotate-right"></i></button>
+            <button class="icon-btn" onclick="triggerFileSelect()" title="Upload"><i class="fa-solid fa-upload"></i></button>
+            <a class="icon-btn" href="/chat" title="Chat"><i class="fa-solid fa-comment-dots"></i></a>
+            <a class="icon-btn" href="/query" title="Cypher Query"><i class="fa-solid fa-terminal"></i></a>
+            <a class="icon-btn" href="/review" title="Review"><i class="fa-solid fa-clipboard-check"></i></a>
+            <a class="icon-btn" href="/files" title="Files"><i class="fa-solid fa-folder-open"></i></a>
+        </nav>
+    </header>
 
-            <div class="controls">
-                <!-- Search -->
-                <div class="control-group">
-                    <input type="text" id="search-input" placeholder="Search nodes...">
-                    <button onclick="searchGraph()" class="icon-btn"><i
-                            class="fa-solid fa-magnifying-glass"></i></button>
-                </div>
-
-                <!-- Source Filter -->
-                <div class="control-group">
-                    <select id="source-filter" onchange="searchGraph()" class="styled-select">
-                        <option value="">All Sources</option>
-                        {% for source in sources %}
-                        <option value="{{ source }}">{{ source }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <!-- Confidence Filter -->
-                <div class="control-group">
-                    <input type="number" step="0.01" min="0" max="1" id="min-conf-input" placeholder="Min confidence (e.g. 0.5)">
-                    <button onclick="applyMinConfidence()" class="icon-btn" title="Apply confidence filter"><i class="fa-solid fa-filter"></i></button>
-                </div>
-
-                <!-- Actions -->
-                <div class="control-group">
-                    <button onclick="refreshGraph()" class="refresh-btn" title="Refresh Graph">
-                        <i class="fa-solid fa-rotate-right"></i>
-                    </button>
-                    <button onclick="clearGraph()" class="refresh-btn danger-btn" title="Clear Graph">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                    <button onclick="triggerFileSelect()" class="refresh-btn" title="Upload Files"
-                        style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
-                        <i class="fa-solid fa-upload"></i>
-                    </button>
-                    <a href="/query" class="refresh-btn" title="Cypher Query"
-                        style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
-                        <i class="fa-solid fa-terminal"></i>
-                    </a>
-                    <a href="/review" class="refresh-btn" title="Review Relations"
-                        style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
-                        <i class="fa-solid fa-clipboard-check"></i>
-                    </a>
-                    <a href="/files" class="refresh-btn" title="Manage Files"
-                        style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
-                        <i class="fa-solid fa-folder-open"></i>
-                    </a>
-                </div>
-
-                <!-- Layout Toggle -->
-                <div class="control-group" style="margin-top: 10px;">
-                    <select id="layout-select" class="styled-select" onchange="applyLayoutFromSelect()">
-                        <option value="fcose">fcose (auto)</option>
-                        <option value="cose">cose</option>
-                        <option value="grid">grid</option>
-                        <option value="concentric">concentric</option>
-                    </select>
-                </div>
-
-                <!-- URL Import -->
-                <div class="control-group" style="margin-top: 10px;">
-                    <input type="text" id="url-input" placeholder="Import from URL...">
-                    <button onclick="processUrl()" class="icon-btn"><i class="fa-solid fa-globe"></i></button>
-                </div>
-
-                <!-- Export Subgraph -->
-                <div class="control-group" style="margin-top: 10px;">
-                    <input type="text" id="export-seed" placeholder="Seed id (optional)">
-                    <input type="number" id="export-depth" placeholder="Depth" value="1" style="width:80px">
-                    <select id="export-format" class="styled-select" style="max-width:120px">
-                        <option value="json">JSON</option>
-                        <option value="csv">CSV</option>
-                        <option value="graphml">GraphML</option>
-                    </select>
-                    <button onclick="exportSubgraph()" class="icon-btn" title="Export"><i class="fa-solid fa-download"></i></button>
-                </div>
-
-                <!-- Shortest Path -->
-                <div class="control-group" style="margin-top: 10px;">
-                    <input type="text" id="sp-source" placeholder="Shortest path: source">
-                    <input type="text" id="sp-target" placeholder="target">
-                    <button onclick="shortestPath()" class="icon-btn" title="Find shortest path"><i class="fa-solid fa-route"></i></button>
-                </div>
+    <div class="layout" id="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Graph</div>
+                <input type="text" id="seed-id" placeholder="Seed node (optional)">
+                <input type="number" id="depth" value="1" min="1" max="4" step="1" title="Depth">
+                <button class="btn" onclick="refreshGraph()">Load</button>
             </div>
 
-            <!-- Minimized Chat -->
-            <div class="chat-container">
-                <div class="chat-header" id="chat-header">
-                    <i class="fa-regular fa-comments"></i> AI Assistant
-                </div>
-                <div class="chat-history" id="chat-history">
-                    <div class="message assistant">
-                        Hi! Drag & drop files to the graph to start.
-                    </div>
-                </div>
-                <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Ask AI...">
-                    <button onclick="sendMessage()" class="icon-btn"><i class="fa-solid fa-paper-plane"></i></button>
-                </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Search</div>
+                <input type="text" id="search-input" placeholder="Search node... (Enter)" />
             </div>
-        </div>
 
-        <!-- Main Graph Area -->
-        <div class="main-content">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Filter</div>
+                <input type="number" id="min-conf" placeholder="Min confidence 0-1" step="0.05" min="0" max="1">
+                <select id="source-filter">
+                    <option value="">All Sources</option>
+                    {% for s in sources %}
+                    <option value="{{ s }}">{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Path</div>
+                <input type="text" id="sp-source" placeholder="source node">
+                <input type="text" id="sp-target" placeholder="target node">
+                <button class="btn" onclick="shortestPath()">Find</button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Import</div>
+                <input type="text" id="url-input" placeholder="Import from URL">
+                <button class="btn" onclick="processUrl()">Go</button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Export</div>
+                <input id="export-seed" placeholder="Seed (optional)">
+                <input id="export-depth" type="number" value="1" min="1" max="4" step="1">
+                <select id="export-format">
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                    <option value="graphml">GraphML</option>
+                </select>
+                <button class="btn" onclick="exportSubgraph()">Export</button>
+            </div>
+        </aside>
+
+        <main class="graph-area" aria-label="Graph">
+            <div class="graph-toolbar">
+                <button class="icon-btn" onclick="applyLayout('fcose')" title="Auto Layout"><i class="fa-solid fa-sitemap"></i></button>
+                <button class="icon-btn" onclick="fitGraph()" title="Fit"><i class="fa-solid fa-expand"></i></button>
+                <button class="icon-btn" onclick="zoomIn()" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                <button class="icon-btn" onclick="zoomOut()" title="Zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                <button class="icon-btn danger" onclick="clearGraph()" title="Clear"><i class="fa-solid fa-trash"></i></button>
+            </div>
+
             <div id="cy"></div>
 
-            <!-- Drag & Drop Overlay -->
-            <div id="drop-zone" class="drop-zone hidden">
+            <aside class="detail-panel" id="detail-panel" aria-label="Details">
+                <div class="detail-header">
+                    <span id="detail-title">Node Details</span>
+                    <button class="icon-btn" onclick="closeDetailPanel()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="detail-content">
+                    <div class="detail-section">
+                        <div class="detail-subtitle">Attributes</div>
+                        <div id="detail-attrs"></div>
+                    </div>
+                    <div class="detail-section">
+                        <div class="detail-subtitle">Outgoing</div>
+                        <div id="detail-out"></div>
+                    </div>
+                    <div class="detail-section">
+                        <div class="detail-subtitle">Incoming</div>
+                        <div id="detail-in"></div>
+                    </div>
+                    <div class="detail-section">
+                        <div class="detail-subtitle">Actions</div>
+                        <button class="btn" onclick="highlightNeighborhood()">Highlight Neighborhood</button>
+                        <button class="btn danger" onclick="deleteSelectedNode()">Remove from View</button>
+                    </div>
+                </div>
+            </aside>
+
+            <div id="drop-zone" class="drop-zone" aria-hidden="true">
                 <div class="drop-content">
                     <i class="fa-solid fa-cloud-arrow-up"></i>
-                    <h3>Drop files here to upload</h3>
-                    <p>Supports .txt, .md, .pdf, .docx, .pptx, .html</p>
+                    <h3>Drop files here</h3>
+                    <p>Supports TXT / MD / PDF / DOCX / PPTX / HTML</p>
                 </div>
             </div>
-
-            <div id="loading" class="loading" style="display:none;">
-                <div class="spinner"></div>
-                <span>Processing...</span>
-            </div>
-        </div>
+        </main>
     </div>
 
-    <!-- Hidden File Input for Button Click Fallback if needed -->
-    <input type="file" id="file-upload" accept=".txt,.md,.pdf,.docx,.pptx,.html" multiple style="display: none;"
-        onchange="uploadFile()">
-
+    <input type="file" id="file-upload" multiple style="display:none" onchange="uploadFile()">
+    <div id="loading" class="loading" style="display:none">Loading...</div>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
-
 </html>
